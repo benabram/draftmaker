@@ -3,14 +3,14 @@
 .gitignore
 .dockerignore
 
+# CI/CD
+.github/
+
 # Python virtual environment
-.venv
 venv/
+.venv/
 env/
-<<<<<<< HEAD
 ENV/
-=======
->>>>>>> develop
 
 # Python cache and compiled files
 __pycache__/
@@ -18,14 +18,13 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Testing
+# Testing & Development
 tests/
+scripts/
+requirements-dev.txt
 .pytest_cache/
 .coverage
-<<<<<<< HEAD
 htmlcov/
-=======
->>>>>>> develop
 
 # IDE and editor configuration
 .vscode/
@@ -35,22 +34,8 @@ htmlcov/
 .DS_Store
 
 # Secrets and environment variables
-<<<<<<< HEAD
-# Never copy .env files into your image!
-=======
->>>>>>> develop
 *.env
+.env.*
 
 # Documentation
 README.md
-<<<<<<< HEAD
-
-# Build and distribution artifacts
-build/
-dist/
-*.egg-info/
-=======
-.github/
-scripts/
-requirements-dev.txt
->>>>>>> develop
