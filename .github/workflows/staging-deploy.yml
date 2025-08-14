@@ -1,0 +1,39 @@
+# This is a GitHub Actions workflow file to build and deploy to the local staging environment.
+# It triggers on every push to the 'develop' branch and runs on a self-hosted runner.
+
+name: Deploy to Staging (Local Docker)
+
+on:
+  push:
+    branches:
+      - 'develop'
+
+jobs:
+  deploy-to-staging:
+    name: Build and Deploy to Staging
+    # This is the key part: it tells the job to run on your local machine
+    runs-on: self-hosted
+
+    steps:
+      - name: 1. Check out the latest code
+        uses: actions/checkout@v4
+
+      - name: 2. Build the Docker image
+        run: docker build -t ebay-listing-automator-staging .
+
+      - name: 3. Stop and remove any old running container
+        # This step prevents errors from conflicting container names.
+        # continue-on-error ensures the workflow doesn't fail if the container doesn't exist yet.
+        run: |
+          if [ $(docker ps -q -f name=staging-container) ]; then
+            docker stop staging-container
+            docker rm staging-container
+          fi
+        continue-on-error: true
+
+      - name: 4. Run the new Docker container
+        # This runs the container in detached mode (-d) and names it 'staging-container'.
+        # It also maps port 8080 on your host machine to port 8080 in the container.
+        run: |
+          docker run -d --name staging-container -p 8080:8080 ebay-listing-automator-staging
+
