@@ -24,7 +24,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-.env
+*.env
+.env.*
+.env.production
+.env.staging
 *.manifest
 *.spec
 # Installer logs
