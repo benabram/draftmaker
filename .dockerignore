@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+.dockerignore
+
+# Python virtual environment
+.venv
+venv/
+env/
+ENV/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and editor configuration
+.vscode/
+.idea/
+
+# OS-specific files
+.DS_Store
+
+# Secrets and environment variables
+# Never copy .env files into your image!
+*.env
+
+# Documentation
+README.md
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
