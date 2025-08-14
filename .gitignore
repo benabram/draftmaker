@@ -1,14 +1,7 @@
-# Python
-# -------------------------------------------------------------------
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -28,17 +21,13 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a CI process and not committed to
-#  the repository.
+*.env
+.env.*
 *.manifest
 *.spec
-
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -51,10 +40,6 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
-
-# Environments
-# -------------------------------------------------------------------
-.env
 .venv
 env/
 venv/
@@ -62,8 +47,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# Docker
-# -------------------------------------------------------------------
 # docker-compose.yml
 # docker-compose.override.yml
 
@@ -84,7 +67,6 @@ docker-compose.local.yml
 
 # Secrets - Never commit secrets!
 # -------------------------------------------------------------------
-*.env
 secrets.yml
 *.pem
 *.key
