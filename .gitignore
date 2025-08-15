@@ -77,3 +77,6 @@ docker-compose.local.yml
 secrets.yml
 *.pem
 *.key
+
+# Token storage (local development)
+.tokens/

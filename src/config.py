@@ -111,3 +111,6 @@ def is_production() -> bool:
 def is_development() -> bool:
     """Check if the application is running in development."""
     return settings.environment.lower() == "development"
+
+
+REDIRECT_URI = "https://draft-maker-541660382374.us-west1.run.app/oauth/callback"
