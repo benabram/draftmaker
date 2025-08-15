@@ -1,0 +1,55 @@
+# This file specifies files that are *not* uploaded to Google Cloud Platform
+# using gcloud deploy.
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+documentation/
+docs/
+*.md
+
+# Testing
+tests/
+pytest_cache/
+.coverage
+htmlcov/
+
+# Environment files
+.env
+.env.*
+
+# Development
+*.log
+*.sqlite
+*.db
+
+# GitHub
+.github/
+
+# Docker (for local development)
+Dockerfile.dev
+docker-compose.yml
+docker-compose.*.yml
