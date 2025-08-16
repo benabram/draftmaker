@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  draftmaker:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: ebay-draftmaker
+    volumes:
+      # Mount config and tokens for persistence
+      - ./config.ini:/app/config.ini:ro
+      - ./.tokens:/app/.tokens
+      - ./logs:/app/logs
+      - ./output:/app/output
+      - ./data:/app/data:ro
+    environment:
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    networks:
+      - draftmaker-network
+    restart: unless-stopped
+    command: ["--upc-file", "data/test_upcs.txt"]
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: draftmaker-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - draftmaker-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+networks:
+  draftmaker-network:
+    driver: bridge
+
+volumes:
+  redis-data:

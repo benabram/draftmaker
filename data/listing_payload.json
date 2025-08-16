@@ -1,0 +1,44 @@
+{
+  "inventoryItem": {
+    "product": {
+      "title": "<Artist Name> <Release Title> CD <Album> <Release Year> <Studio> <Catalog number>",
+      "imageUrls": [
+        "<Front Cover Image URL>"
+      ],
+      "aspects": {
+        "Format": ["CD"],
+        "Type": ["Album"],
+        "Artist": ["<Artist Name>"],
+        "Genre": ["<Genre>"],
+        "Record Label": ["<Record Label>"],
+        "Release Year": ["<Release Year>"],
+        "Features": ["<Sealed>"],
+        "Producer": ["<Producer>"],
+        "Case Type": ["Jewel Case: Standard"],
+        "CD Grading": ["Excellent Condition"],
+        "Catalog Number": ["<Catalog Number>"]
+      },
+      "description": "Images shown are from the CD cover archive. The CD is as described. Put something here -->>>"
+    },
+    "condition": "USED_VERY_GOOD",
+    "upc": ["<UPC>"]
+  },
+  "offer": {
+    "sku": "<SKU_FOR_THIS_ITEM>",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "pricingSummary": {
+      "price": {
+        "value": "<average_price>",
+        "currency": "USD"
+      },
+      "bestOfferEnabled": true
+    },
+    "listingPolicies": {
+      "fulfillmentPolicyId": "345923687022",
+      "paymentPolicyId": "345889112022",
+      "returnPolicyId": "345889054022"
+    },
+    "categoryId": "176984"
+  }
+}
