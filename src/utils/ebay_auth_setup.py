@@ -31,7 +31,7 @@ class EbayAuthSetup:
         """Initialize the auth setup."""
         self.auth_url = EBAY_AUTH_URL
         self.token_url = EBAY_TOKEN_URL
-        self.redirect_uri = "https://localhost:3000/callback"  # Default redirect URI
+        self.redirect_uri = "https://draft-maker-541660382374.us-west1.run.app/oauth/callback"  # Default redirect URI
         
     def generate_auth_url(self) -> str:
         """
@@ -128,7 +128,7 @@ async def main():
     print(auth_url)
     print()
     print("After authorizing, you will be redirected to a URL that looks like:")
-    print("https://localhost:3000/callback?code=AUTHORIZATION_CODE&expires_in=299")
+    print("https://draft-maker-541660382374.us-west1.run.app/oauth/callback")
     print()
     
     # Get the authorization code from user

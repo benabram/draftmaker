@@ -80,3 +80,6 @@ secrets.yml
 
 # Token storage (local development)
 .tokens/
+
+# Cache storage (local development)
+.cache/
