@@ -15,7 +15,9 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_NAME="ebay-draftmaker"
 REGION="${REGION:-us-central1}"
-SERVICE_ACCOUNT_NAME="${PROJECT_NAME}-sa"
+SERVICE_ACCOUNT_NAME="draft-maker-identity"
+SERVICE_ACCOUNT_EMAIL="draft-maker-identity@draft-maker-468923.iam.gserviceaccount.com"
+PROJECT_ID_DEFAULT="draft-maker-468923"
 
 # Function to print colored output
 print_message() {
@@ -51,9 +53,8 @@ check_prerequisites() {
     # Get/Set project ID
     PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
     if [ -z "$PROJECT_ID" ]; then
-        print_message $YELLOW "No project set. Available projects:"
-        gcloud projects list --format="table(projectId,name)"
-        read -p "Enter project ID: " PROJECT_ID
+        print_message $YELLOW "No project set. Using default: $PROJECT_ID_DEFAULT"
+        PROJECT_ID=$PROJECT_ID_DEFAULT
         gcloud config set project $PROJECT_ID
     fi
     
@@ -75,33 +76,38 @@ enable_apis() {
     print_message $GREEN "APIs enabled"
 }
 
-# Create service account
+# Setup service account permissions
 setup_service_account() {
-    print_message $YELLOW "Setting up service account..."
+    print_message $YELLOW "Configuring service account permissions..."
     
-    # Create service account if it doesn't exist
-    if ! gcloud iam service-accounts describe ${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com &>/dev/null; then
-        gcloud iam service-accounts create ${SERVICE_ACCOUNT_NAME} \
-            --display-name="eBay Draft Maker Service Account"
+    # Service account already exists, just verify and grant permissions
+    if gcloud iam service-accounts describe ${SERVICE_ACCOUNT_EMAIL} &>/dev/null; then
+        print_message $GREEN "Service account found: ${SERVICE_ACCOUNT_EMAIL}"
+    else
+        print_message $RED "Service account not found: ${SERVICE_ACCOUNT_EMAIL}"
+        print_message $YELLOW "Please verify the service account exists in your project"
+        exit 1
     fi
     
     # Grant necessary roles
+    print_message $YELLOW "Granting necessary IAM roles..."
+    
     gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-        --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+        --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
         --role="roles/run.invoker" \
         --condition=None
     
     gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-        --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+        --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
         --role="roles/storage.objectViewer" \
         --condition=None
     
     gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-        --member="serviceAccount:${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+        --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
         --role="roles/secretmanager.secretAccessor" \
         --condition=None
     
-    print_message $GREEN "Service account configured"
+    print_message $GREEN "Service account permissions configured"
 }
 
 # Setup secrets in Secret Manager
