@@ -78,6 +78,11 @@ secrets.yml
 *.pem
 *.key
 
+# Service account keys
+*-sa-key.json
+github-actions-sa-key.json
+setup-github-secrets.sh
+
 # Token storage (local development)
 .tokens/
 
