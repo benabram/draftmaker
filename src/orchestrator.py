@@ -187,9 +187,10 @@ class ListingOrchestrator:
             logger.info(f"[{upc}] Fetching metadata...")
             metadata = await self.metadata_fetcher.fetch_metadata(upc)
             
-            if not metadata or not metadata.get("found"):
-                result["error"] = "No metadata found"
-                logger.warning(f"[{upc}] No metadata found")
+            # Check if metadata is complete (has at least title and artist)
+            if not metadata or not metadata.get("is_complete"):
+                result["error"] = "No metadata found or incomplete"
+                logger.warning(f"[{upc}] No metadata found or incomplete data")
                 return result
             
             result["metadata"] = metadata
