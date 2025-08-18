@@ -61,8 +61,8 @@ jobs:
             GCP_PROJECT_ID=${{ env.PROJECT_ID }}
             GCP_REGION=${{ env.REGION }}
             STORAGE_BUCKET_NAME=draft-maker-bucket
-            FIRESTORE_DATABASE_ID=draft-maker-database
-            FIRESTORE_DATABASE_NAME=draft-maker-database
+            FIRESTORE_DATABASE_ID=(default)
+            FIRESTORE_DATABASE_NAME=(default)
             LOG_LEVEL=INFO
             SERVICE_ACCOUNT_OAUTH_2_CLIENT_ID=117616124807389754852
             FIRESTORE_COLLECTION_MBID=mbid_cache
