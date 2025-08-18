@@ -19,21 +19,40 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 2. Build the Docker image
-        run: docker build -t ebay-listing-automator-staging .
+        run: docker build -f Dockerfile.production -t draft-maker-staging .
 
       - name: 3. Stop and remove any old running container
         # This step prevents errors from conflicting container names.
         # continue-on-error ensures the workflow doesn't fail if the container doesn't exist yet.
         run: |
-          if [ $(docker ps -q -f name=staging-container) ]; then
-            docker stop staging-container
-            docker rm staging-container
+          if [ $(docker ps -q -f name=draft-maker-staging) ]; then
+            docker stop draft-maker-staging
+            docker rm draft-maker-staging
           fi
         continue-on-error: true
 
       - name: 4. Run the new Docker container
-        # This runs the container in detached mode (-d) and names it 'staging-container'.
-        # It also maps port 8080 on your host machine to port 8080 in the container.
+        # This runs the container in detached mode (-d) with proper environment configuration
+        # It mounts the staging environment file and service account credentials
         run: |
-          docker run -d --name staging-container -p 8080:8080 ebay-listing-automator-staging
+          # Check if service account key exists
+          if [ -f "keys/draft-maker-identity-key.json" ]; then
+            SA_MOUNT="-v $(pwd)/keys/draft-maker-identity-key.json:/app/service-account-key.json:ro"
+          else
+            echo "Warning: Service account key not found at keys/draft-maker-identity-key.json"
+            echo "Run scripts/setup-service-accounts.sh to create it"
+            SA_MOUNT=""
+          fi
+          
+          docker run -d \
+            --name draft-maker-staging \
+            -p 8080:8080 \
+            -v $(pwd)/.env.staging:/app/.env:ro \
+            -v $(pwd)/logs:/app/logs \
+            -v $(pwd)/output:/app/output \
+            -v $(pwd)/data:/app/data:ro \
+            ${SA_MOUNT} \
+            --env-file .env.staging \
+            --env GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json \
+            draft-maker-staging
 

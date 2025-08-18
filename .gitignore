@@ -88,3 +88,9 @@ setup-github-secrets.sh
 
 # Cache storage (local development)
 .cache/
+
+# Service account keys
+keys/
+*.json
+service-account-key.json
+draft-maker-identity-key.json
