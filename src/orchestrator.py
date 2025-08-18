@@ -218,7 +218,7 @@ class ListingOrchestrator:
             
             # Step 3: Fetch images
             logger.info(f"[{upc}] Fetching album images...")
-            images = await self.image_fetcher.fetch_images(upc, metadata)
+            images = await self.image_fetcher.fetch_images(metadata)
             
             if not images or not images.get("primary_image"):
                 logger.warning(f"[{upc}] No images found")
