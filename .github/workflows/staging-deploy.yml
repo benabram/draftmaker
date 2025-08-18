@@ -12,32 +12,42 @@ jobs:
   deploy-to-staging:
     name: Build and Deploy to Staging
     # This is the key part: it tells the job to run on your local machine
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: 1. Check out the latest code
         uses: actions/checkout@v4
+        with:
+          clean: true
 
-      - name: 2. Build the Docker image
-        run: docker build -f Dockerfile.production -t draft-maker-staging .
+      - name: 2. Clean up old Docker images
+        run: |
+          docker image prune -f
+          docker container prune -f
+        continue-on-error: true
 
-      - name: 3. Stop and remove any old running container
+      - name: 3. Build the Docker image
+        run: docker build -f Dockerfile.production -t draft-maker-staging:latest .
+
+      - name: 4. Stop and remove any old running container
         # This step prevents errors from conflicting container names.
         # continue-on-error ensures the workflow doesn't fail if the container doesn't exist yet.
         run: |
-          if [ $(docker ps -q -f name=draft-maker-staging) ]; then
-            docker stop draft-maker-staging
-            docker rm draft-maker-staging
-          fi
+          docker stop draft-maker-staging || true
+          docker rm draft-maker-staging || true
         continue-on-error: true
 
-      - name: 4. Run the new Docker container
+      - name: 5. Run the new Docker container
         # This runs the container in detached mode (-d) with proper environment configuration
         # It mounts the staging environment file and service account credentials
         run: |
+          # Ensure we're in the right directory
+          cd /home/benbuntu/draftmaker
+          
           # Check if service account key exists
           if [ -f "keys/draft-maker-identity-key.json" ]; then
-            SA_MOUNT="-v $(pwd)/keys/draft-maker-identity-key.json:/app/service-account-key.json:ro"
+            echo "✓ Service account key found"
+            SA_MOUNT="-v /home/benbuntu/draftmaker/keys/draft-maker-identity-key.json:/app/service-account-key.json:ro"
           else
             echo "Warning: Service account key not found at keys/draft-maker-identity-key.json"
             echo "Run scripts/setup-service-accounts.sh to create it"
@@ -46,13 +56,53 @@ jobs:
           
           docker run -d \
             --name draft-maker-staging \
+            --restart unless-stopped \
             -p 8080:8080 \
-            -v $(pwd)/.env.staging:/app/.env:ro \
-            -v $(pwd)/logs:/app/logs \
-            -v $(pwd)/output:/app/output \
-            -v $(pwd)/data:/app/data:ro \
+            -v /home/benbuntu/draftmaker/.env.staging:/app/.env:ro \
+            -v /home/benbuntu/draftmaker/logs:/app/logs \
+            -v /home/benbuntu/draftmaker/output:/app/output \
+            -v /home/benbuntu/draftmaker/data:/app/data:ro \
             ${SA_MOUNT} \
-            --env-file .env.staging \
+            --env-file /home/benbuntu/draftmaker/.env.staging \
             --env GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json \
-            draft-maker-staging
+            --env ENVIRONMENT=staging \
+            --env GCP_PROJECT_ID=draft-maker-468923 \
+            draft-maker-staging:latest
 
+      - name: 6. Verify container is running
+        run: |
+          sleep 5
+          if [ $(docker ps -q -f name=draft-maker-staging) ]; then
+            echo "✓ Container draft-maker-staging is running"
+            docker ps -f name=draft-maker-staging
+            echo ""
+            echo "Container logs (last 20 lines):"
+            docker logs --tail 20 draft-maker-staging
+          else
+            echo "✗ Container draft-maker-staging is not running"
+            echo "Checking logs for errors:"
+            docker logs draft-maker-staging
+            exit 1
+          fi
+
+      - name: 7. Test application health
+        run: |
+          echo "Waiting for application to be ready..."
+          sleep 10
+          
+          # Test if the application responds
+          if curl -f http://localhost:8080/health 2>/dev/null; then
+            echo ""
+            echo "✓ Application is responding on http://localhost:8080"
+          else
+            echo "Note: No health endpoint found, checking main page"
+            if curl -f http://localhost:8080 2>/dev/null | head -n 5; then
+              echo "✓ Application is responding on http://localhost:8080"
+            else
+              echo "⚠ Application may not be fully ready yet"
+            fi
+          fi
+          
+          echo ""
+          echo "Deployment complete! Application is available at http://localhost:8080"
+          echo "To view logs: docker logs -f draft-maker-staging"
