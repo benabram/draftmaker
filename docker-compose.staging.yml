@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  draft-maker-staging:
+    image: draft-maker-staging:latest
+    container_name: draft-maker-staging
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    environment:
+      # Run mode: batch, single, test, shell, sleep
+      MODE: ${MODE:-test}
+      # For batch mode
+      INPUT_SOURCE: ${INPUT_SOURCE:-}
+      LOCAL_FILE: ${LOCAL_FILE:-false}
+      TEST_MODE: ${TEST_MODE:-true}
+      # For single mode
+      SINGLE_UPC: ${SINGLE_UPC:-}
+      # Google Cloud settings
+      GOOGLE_APPLICATION_CREDENTIALS: /app/service-account-key.json
+    volumes:
+      # Mount environment file
+      - ./.env.staging:/app/.env:ro
+      # Mount service account key
+      - ./keys/draft-maker-identity-key.json:/app/service-account-key.json:ro
+      # Mount data directories
+      - ./logs:/app/logs
+      - ./output:/app/output
+      - ./data:/app/data:ro
+    networks:
+      - draft-maker-network
+    restart: "no"
+    
+  # Optional: Add a batch runner that processes files periodically
+  draft-maker-scheduler:
+    image: draft-maker-staging:latest
+    container_name: draft-maker-scheduler
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    environment:
+      MODE: sleep  # Keep container running
+      GOOGLE_APPLICATION_CREDENTIALS: /app/service-account-key.json
+    volumes:
+      - ./.env.staging:/app/.env:ro
+      - ./keys/draft-maker-identity-key.json:/app/service-account-key.json:ro
+      - ./logs:/app/logs
+      - ./output:/app/output
+      - ./data:/app/data:ro
+      - ./scripts:/app/scripts:ro
+    networks:
+      - draft-maker-network
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do
+        echo '[Scheduler] Checking for batch files...';
+        if [ -f /app/data/batch.txt ]; then
+          echo '[Scheduler] Found batch.txt, processing...';
+          python /app/main.py /app/data/batch.txt --local;
+          mv /app/data/batch.txt /app/data/batch_$(date +%Y%m%d_%H%M%S).processed;
+        fi;
+        sleep 300;
+      done"
+
+networks:
+  draft-maker-network:
+    driver: bridge
