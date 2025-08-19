@@ -23,6 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application source code and data
 COPY ./src ./src
 COPY ./data ./data
+COPY ./main.py .
+COPY ./app.py .
 
 # Create a non-root user to run the application
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
@@ -31,5 +33,5 @@ USER appuser
 # Expose the port that the application will run on
 EXPOSE 8080
 
-# Run the FastAPI application using uvicorn
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run the main application script
+CMD ["python", "main.py"]
