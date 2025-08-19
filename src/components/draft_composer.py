@@ -248,6 +248,9 @@ class DraftComposer:
         # Available quantity is always 1 for individual CDs
         offer["availableQuantity"] = 1
         
+        # Set listing start quantity (required for publishing)
+        offer["listingStartQuantity"] = 1
+        
         # Use the eBay listing policy IDs from settings
         offer["listingPolicies"]["fulfillmentPolicyId"] = settings.ebay_fulfillment_policy_id
         offer["listingPolicies"]["paymentPolicyId"] = settings.ebay_payment_policy_id
@@ -261,6 +264,9 @@ class DraftComposer:
         
         # Set format as FIXED_PRICE
         offer["format"] = "FIXED_PRICE"
+        
+        # Set merchant location key for the offer
+        offer["merchantLocationKey"] = "DEFAULT_LOCATION"
         
         return offer
     
