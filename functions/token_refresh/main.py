@@ -50,7 +50,14 @@ async def refresh_ebay_token():
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
         
-        time_until_expiry = expires_at - datetime.utcnow()
+        # Handle Firestore timestamp objects
+        if hasattr(expires_at, '_seconds'):
+            expires_at = datetime.fromtimestamp(expires_at._seconds)
+        
+        # Use timezone-aware datetime for comparison
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc) if hasattr(expires_at, 'tzinfo') and expires_at.tzinfo else datetime.utcnow()
+        time_until_expiry = expires_at - now_utc
         
         if time_until_expiry > timedelta(minutes=30):
             logger.info(f"eBay token still valid for {time_until_expiry}. Skipping refresh.")
