@@ -2,6 +2,7 @@
 
 import json
 import asyncio
+import copy
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import httpx
@@ -136,8 +137,8 @@ class DraftComposer:
         Returns:
             Inventory item payload
         """
-        # Start with the template
-        inventory = self.listing_template["inventoryItem"].copy()
+        # Start with a deep copy of the template to avoid modifying the original
+        inventory = copy.deepcopy(self.listing_template["inventoryItem"])
         
         # Build title
         artist = metadata.get("artist_name", "Unknown Artist")
@@ -145,6 +146,9 @@ class DraftComposer:
         year = metadata.get("year", "")
         label = metadata.get("label_name", "")
         catalog = metadata.get("catalog_number", "")
+        
+        # Log metadata for debugging
+        logger.debug(f"Building title with metadata - Artist: {artist}, Album: {album}, Year: {year}")
         
         # Create title (max 80 characters for eBay)
         title_parts = [artist, album]
@@ -185,6 +189,9 @@ class DraftComposer:
         
         if year:
             aspects["Release Year"] = [str(year)]
+            logger.debug(f"Set Release Year aspect to: {year}")
+        else:
+            logger.warning(f"No year found in metadata for UPC: {metadata.get('upc')}")
         
         if label:
             aspects["Record Label"] = [label]
@@ -250,8 +257,8 @@ class DraftComposer:
         Returns:
             Offer payload
         """
-        # Start with the template
-        offer = self.listing_template["offer"].copy()
+        # Start with a deep copy of the template to preserve bestOfferEnabled and other nested fields
+        offer = copy.deepcopy(self.listing_template["offer"])
         
         # Set SKU
         offer["sku"] = sku
@@ -259,6 +266,12 @@ class DraftComposer:
         # Set pricing
         recommended_price = pricing.get("recommended_price", 9.99)
         offer["pricingSummary"]["price"]["value"] = str(recommended_price)
+        
+        # Verify bestOfferEnabled is preserved
+        if "bestOfferEnabled" in offer.get("pricingSummary", {}):
+            logger.debug(f"Best Offer enabled: {offer['pricingSummary']['bestOfferEnabled']}")
+        else:
+            logger.warning("bestOfferEnabled field not found in offer pricingSummary")
         
         # Available quantity is always 1 for individual CDs
         offer["availableQuantity"] = 1
