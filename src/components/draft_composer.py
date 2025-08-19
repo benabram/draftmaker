@@ -210,20 +210,17 @@ class DraftComposer:
         description = self._build_description(metadata, pricing)
         inventory["product"]["description"] = description
         
-        # Set availability with location
+        # Set availability with merchant location key
+        # The merchant location must be pre-configured in the seller's account
+        # We created DEFAULT_LOCATION with North Hollywood, CA 91602
         inventory["availability"] = {
             "shipToLocationAvailability": {
                 "quantity": 1
             }
         }
         
-        # Add location information (required for publishing)
-        inventory["location"] = {
-            "country": "US",
-            "postalCode": settings.seller_postal_code if hasattr(settings, 'seller_postal_code') else "91602",
-            "city": settings.seller_city if hasattr(settings, 'seller_city') else "North Hollywood",
-            "stateOrProvince": settings.seller_state if hasattr(settings, 'seller_state') else "CA"
-        }
+        # Reference the merchant location key (required for publishing)
+        inventory["merchantLocationKey"] = "DEFAULT_LOCATION"
         
         return inventory
     
