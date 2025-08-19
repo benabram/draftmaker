@@ -222,6 +222,21 @@ class DraftComposer:
         # Reference the merchant location key (required for publishing)
         inventory["merchantLocationKey"] = "DEFAULT_LOCATION"
         
+        # Add package details (required for publishing)
+        # Standard CD jewel case dimensions and weight
+        inventory["packageWeightAndSize"] = {
+            "dimensions": {
+                "height": 1.0,  # inches
+                "length": 7.0,  # inches
+                "width": 7.0,   # inches
+                "unit": "INCH"
+            },
+            "weight": {
+                "value": 12.0,  # ounces (typical CD in jewel case)
+                "unit": "OUNCE"
+            }
+        }
+        
         return inventory
     
     def _build_offer(self, sku: str, pricing: Dict[str, Any]) -> Dict[str, Any]:
