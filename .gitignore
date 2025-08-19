@@ -53,6 +53,8 @@ ENV/
 env.bak/
 venv.bak/
 
+/venv
+
 # docker-compose.yml
 # docker-compose.override.yml
 
@@ -94,3 +96,6 @@ keys/
 *.json
 service-account-key.json
 draft-maker-identity-key.json
+
+/output
+/logs
