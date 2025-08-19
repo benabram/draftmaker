@@ -550,7 +550,7 @@ async def health_check():
     }
 
 
-async def run_batch_processing_task(
+def run_batch_processing_task(
     job_id: str,
     gcs_path: str,
     create_drafts: bool,
@@ -558,6 +558,7 @@ async def run_batch_processing_task(
 ):
     """
     Background task to run batch processing.
+    Note: This is a sync function that will be run in a thread pool.
     
     Args:
         job_id: The job ID for tracking
@@ -574,17 +575,17 @@ async def run_batch_processing_task(
         # Initialize orchestrator
         orchestrator = ListingOrchestrator()
         
-        # Run batch processing
-        results = await orchestrator.process_batch(
+        # Run batch processing using asyncio.run() to handle async in sync context
+        results = asyncio.run(orchestrator.process_batch(
             input_source=gcs_path,
             create_drafts=create_drafts,
             save_results=True,
             is_gcs=True
-        )
+        ))
         
         # Update job status with results
         batch_jobs[job_id].update({
-            "status": "completed" if results.get("success", False) else "failed",
+            "status": "completed",
             "completed_at": datetime.now(),
             "total_upcs": results.get("total_upcs", 0),
             "successful": results.get("successful", 0),
@@ -592,10 +593,10 @@ async def run_batch_processing_task(
             "results": results
         })
         
-        logger.info(f"Batch job {job_id} completed successfully")
+        logger.info(f"Batch job {job_id} completed with {results.get('successful', 0)} successful and {results.get('failed', 0)} failed")
         
     except Exception as e:
-        logger.error(f"Batch job {job_id} failed: {str(e)}")
+        logger.error(f"Batch job {job_id} failed with error: {str(e)}", exc_info=True)
         batch_jobs[job_id].update({
             "status": "failed",
             "completed_at": datetime.now(),
