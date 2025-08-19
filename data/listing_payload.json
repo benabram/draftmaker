@@ -1,7 +1,7 @@
 {
   "inventoryItem": {
     "product": {
-      "title": "<Artist Name> <Release Title> CD <Album> <Release Year> <Studio> <Catalog number>",
+      "title": "<Artist Name> <Release Title> CD <Album> Release Year <Studio> <Catalog number>",
       "imageUrls": [
         "<Front Cover Image URL>"
       ],
@@ -13,7 +13,6 @@
         "Record Label": ["<Record Label>"],
         "Release Year": ["<Release Year>"],
         "Features": ["<Sealed>"],
-        "Producer": ["<Producer>"],
         "Case Type": ["Jewel Case: Standard"],
         "CD Grading": ["Excellent Condition"],
         "Catalog Number": ["<Catalog Number>"]
@@ -35,7 +34,7 @@
       "bestOfferEnabled": true
     },
     "listingPolicies": {
-      "fulfillmentPolicyId": "345923687022",
+      "fulfillmentPolicyId": "381603015022",
       "paymentPolicyId": "345889112022",
       "returnPolicyId": "345889054022"
     },

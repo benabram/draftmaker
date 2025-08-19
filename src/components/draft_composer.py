@@ -149,7 +149,7 @@ class DraftComposer:
         # Create title (max 80 characters for eBay)
         title_parts = [artist, album]
         if year:
-            title_parts.append(f"({year})")
+            title_parts.append(f"{year}")
         title_parts.append("CD")
         if label:
             title_parts.append(label)
@@ -267,7 +267,7 @@ class DraftComposer:
         offer["listingStartQuantity"] = 1
         
         # Use the eBay listing policy IDs from settings
-        offer["listingPolicies"]["fulfillmentPolicyId"] = settings.ebay_fulfillment_policy_id
+        offer["listingPolicies"]["fulfillmentPolicyId"] = "381603015022"  # CD Combined Shipping
         offer["listingPolicies"]["paymentPolicyId"] = settings.ebay_payment_policy_id
         offer["listingPolicies"]["returnPolicyId"] = settings.ebay_return_policy_id
         
@@ -304,26 +304,25 @@ class DraftComposer:
         track_count = metadata.get("track_count", "")
         
         description_parts = [
-            f"<h3>{artist} - {album}</h3>",
-            "<p><strong>Condition:</strong> Used - Very Good</p>"
+            f"<h3>{artist} - {album}</h3>"
         ]
         
-        # Add album details
+        # Add new condition and refund text block
+        description_parts.append(
+            "<p>The CD, Cover and Case are in Excellent condition. Case may have punch holes.</p>"
+        )
+        description_parts.append(
+            "<p>The listing image is the official release cover art. If a CD or its cover and jewel case "
+            "are not in the described condition, we will issue a full refund on receipt of refund request "
+            "and proof images.</p>"
+        )
+        
+        # Add album details (without Label, Number of Tracks, and Genre)
         if year:
             description_parts.append(f"<p><strong>Release Year:</strong> {year}</p>")
         
-        if label:
-            description_parts.append(f"<p><strong>Label:</strong> {label}</p>")
-        
         if catalog:
             description_parts.append(f"<p><strong>Catalog Number:</strong> {catalog}</p>")
-        
-        if track_count:
-            description_parts.append(f"<p><strong>Number of Tracks:</strong> {track_count}</p>")
-        
-        # Add genres/styles if available
-        if metadata.get("genres"):
-            description_parts.append(f"<p><strong>Genre:</strong> {', '.join(metadata['genres'])}</p>")
         
         # Add track listing if available
         if metadata.get("tracks") and len(metadata["tracks"]) > 0:
@@ -336,20 +335,9 @@ class DraftComposer:
                 description_parts.append(f"<li>... and {len(metadata['tracks']) - 20} more tracks</li>")
             description_parts.append("</ol>")
         
-        # Add pricing confidence note if available
-        if pricing.get("confidence") and pricing["confidence"] != "none":
-            if pricing.get("sample_size", 0) > 0:
-                description_parts.append(
-                    f"<p><em>Priced based on {pricing['sample_size']} recent sales of similar items.</em></p>"
-                )
-        
         # Add standard footer
         description_parts.append(
-            "<hr><p><strong>Shipping:</strong> Fast and secure shipping with tracking.</p>"
-        )
-        description_parts.append(
-            "<p><strong>Note:</strong> The CD is in very good condition as described. "
-            "Please see photos for actual item condition.</p>"
+            "<hr><p><strong>Shipping:</strong> Combined Shipping available. All CDs are shipped in bubble wrap and a box with tracking.</p>"
         )
         
         return "\n".join(description_parts)

@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default=os.getenv("LOG_LEVEL", "INFO"), env="LOG_LEVEL")
     
     # eBay Listing Policies (for creating drafts)
-    ebay_fulfillment_policy_id: str = Field(default="345923687022", env="EBAY_FULFILLMENT_POLICY_ID")
+    ebay_fulfillment_policy_id: str = Field(default="381603015022", env="EBAY_FULFILLMENT_POLICY_ID")
     ebay_payment_policy_id: str = Field(default="345889112022", env="EBAY_PAYMENT_POLICY_ID")
     ebay_return_policy_id: str = Field(default="345889054022", env="EBAY_RETURN_POLICY_ID")
     ebay_category_id: str = Field(default="176984", env="EBAY_CATEGORY_ID")  # Music CDs category
