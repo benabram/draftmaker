@@ -85,16 +85,21 @@ class DraftComposer:
             if offer_result and "offerId" in offer_result:
                 result["offer_id"] = offer_result["offerId"]
                 result["success"] = True
-                result["status"] = "draft"
+                result["status"] = "unpublished"
                 
-                logger.info(f"Successfully created draft listing for UPC {upc} with SKU {sku}")
+                logger.info(f"Successfully created offer for UPC {upc} with SKU {sku}")
                 
-                # Optionally publish the offer to create a live listing
-                # For now, we keep it as a draft
-                # listing_result = await self._publish_offer(offer_result["offerId"], access_token)
-                # if listing_result and "listingId" in listing_result:
-                #     result["listing_id"] = listing_result["listingId"]
-                #     result["status"] = "published"
+                # Publish the offer to create a live listing
+                logger.info(f"Publishing offer {offer_result['offerId']} to create live listing...")
+                listing_result = await self._publish_offer(offer_result["offerId"], access_token)
+                
+                if listing_result and "listingId" in listing_result:
+                    result["listing_id"] = listing_result["listingId"]
+                    result["status"] = "published"
+                    logger.info(f"Successfully published listing {listing_result['listingId']} for UPC {upc}")
+                else:
+                    logger.warning(f"Offer created but not published for UPC {upc}. It remains as an unpublished offer.")
+                    result["status"] = "unpublished"
             else:
                 result["error"] = "Failed to create offer"
                 

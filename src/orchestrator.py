@@ -240,7 +240,12 @@ class ListingOrchestrator:
                 if draft_result.get("success"):
                     result["draft"] = draft_result
                     result["success"] = True
-                    logger.info(f"[{upc}] Draft created successfully - SKU: {draft_result.get('sku')}, Offer ID: {draft_result.get('offer_id')}")
+                    
+                    # Log the appropriate information based on whether it was published
+                    if draft_result.get("status") == "published" and draft_result.get("listing_id"):
+                        logger.info(f"[{upc}] Listing published successfully - SKU: {draft_result.get('sku')}, Listing ID: {draft_result.get('listing_id')}")
+                    else:
+                        logger.info(f"[{upc}] Offer created successfully - SKU: {draft_result.get('sku')}, Offer ID: {draft_result.get('offer_id')}")
                 else:
                     result["error"] = f"Draft creation failed: {draft_result.get('error')}"
                     logger.error(f"[{upc}] {result['error']}")
@@ -274,7 +279,7 @@ class ListingOrchestrator:
         csv_file = self.output_dir / f"batch_summary_{timestamp}.csv"
         with open(csv_file, 'w') as f:
             # Write header
-            f.write("UPC,Success,Artist,Album,Year,Price,SKU,Offer_ID,Error\n")
+            f.write("UPC,Success,Artist,Album,Year,Price,SKU,Offer_ID,Listing_ID,Status,Error\n")
             
             # Write each result
             for result in summary["results"]:
@@ -299,6 +304,8 @@ class ListingOrchestrator:
                 draft = result.get("draft") or {}
                 sku = draft.get("sku", "") if draft else ""
                 offer_id = draft.get("offer_id", "") if draft else ""
+                listing_id = draft.get("listing_id", "") if draft else ""
+                status = draft.get("status", "") if draft else ""
                 
                 # Get error
                 error = result.get("error") or ""
@@ -306,7 +313,7 @@ class ListingOrchestrator:
                     error = error.replace(",", ";").replace("\n", " ")
                 
                 # Write row
-                f.write(f"{upc},{success},{artist},{album},{year},{price},{sku},{offer_id},{error}\n")
+                f.write(f"{upc},{success},{artist},{album},{year},{price},{sku},{offer_id},{listing_id},{status},{error}\n")
         
         logger.info(f"Summary saved to {csv_file}")
     
