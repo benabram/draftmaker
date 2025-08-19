@@ -1,0 +1,948 @@
+{
+  "database": {
+    "name": "draft-maker-database",
+    "region": "us-west1",
+    "project_id": "draft-maker-468923"
+  },
+  "collections": {
+    "upc_mappings": {
+      "description": "Maps UPC codes to MusicBrainz IDs and Discogs IDs for quick lookups",
+      "document_id_strategy": "UPC code as document ID",
+      "fields": {
+        "upc": {
+          "type": "string",
+          "required": true,
+          "description": "The UPC barcode",
+          "example": "722975007524"
+        },
+        "mbid": {
+          "type": "string",
+          "required": false,
+          "description": "MusicBrainz Release ID",
+          "example": "a84d91d4-3e03-4e7e-b760-2c316f5b6d78"
+        },
+        "discogs_id": {
+          "type": "string",
+          "required": false,
+          "description": "Discogs Release ID",
+          "example": "1234567"
+        },
+        "created_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When the mapping was first created"
+        },
+        "updated_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Last update time"
+        },
+        "source": {
+          "type": "string",
+          "required": true,
+          "description": "Which API provided the mapping",
+          "enum": ["musicbrainz", "discogs", "manual"]
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["mbid"],
+          "type": "single"
+        },
+        {
+          "fields": ["discogs_id"],
+          "type": "single"
+        }
+      ]
+    },
+    "album_metadata": {
+      "description": "Cached album metadata from MusicBrainz and Discogs APIs",
+      "document_id_strategy": "MBID or UPC as document ID",
+      "fields": {
+        "mbid": {
+          "type": "string",
+          "required": false,
+          "description": "MusicBrainz Release ID"
+        },
+        "upc": {
+          "type": "string",
+          "required": true,
+          "description": "UPC barcode"
+        },
+        "artist_name": {
+          "type": "string",
+          "required": true,
+          "description": "Primary artist name",
+          "example": "The Beatles"
+        },
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "Album title",
+          "example": "Abbey Road"
+        },
+        "release_date": {
+          "type": "string",
+          "required": false,
+          "description": "Release date in YYYY-MM-DD format",
+          "example": "1969-09-26"
+        },
+        "year": {
+          "type": "string",
+          "required": false,
+          "description": "Release year",
+          "example": "1969"
+        },
+        "label_name": {
+          "type": "string",
+          "required": false,
+          "description": "Record label",
+          "example": "Apple Records"
+        },
+        "catalog_number": {
+          "type": "string",
+          "required": false,
+          "description": "Label catalog number",
+          "example": "PCS 7088"
+        },
+        "format": {
+          "type": "string",
+          "required": false,
+          "description": "Media format",
+          "example": "CD"
+        },
+        "country": {
+          "type": "string",
+          "required": false,
+          "description": "Country of release",
+          "example": "US"
+        },
+        "genres": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "Music genres from Discogs",
+          "example": ["Rock", "Pop"]
+        },
+        "styles": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "Music styles from Discogs",
+          "example": ["Psychedelic Rock", "Pop Rock"]
+        },
+        "track_count": {
+          "type": "number",
+          "required": false,
+          "description": "Total number of tracks"
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "position": "string",
+            "title": "string",
+            "duration": "string"
+          },
+          "required": false,
+          "description": "Track listing"
+        },
+        "musicbrainz_data": {
+          "type": "map",
+          "required": false,
+          "description": "Raw MusicBrainz API response"
+        },
+        "discogs_data": {
+          "type": "map",
+          "required": false,
+          "description": "Raw Discogs API response"
+        },
+        "metadata_sources": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "Which APIs provided data",
+          "example": ["musicbrainz", "discogs"]
+        },
+        "is_complete": {
+          "type": "boolean",
+          "required": true,
+          "description": "Whether minimum required fields are present"
+        },
+        "cached_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When data was cached"
+        },
+        "ttl": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Expiration time (30 days from cached_at)"
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["artist_name", "title"],
+          "type": "composite"
+        },
+        {
+          "fields": ["upc"],
+          "type": "single"
+        },
+        {
+          "fields": ["ttl"],
+          "type": "single"
+        }
+      ]
+    },
+    "album_images": {
+      "description": "Cached album artwork from Cover Art Archive and Spotify",
+      "document_id_strategy": "MBID or UPC as document ID",
+      "fields": {
+        "identifier": {
+          "type": "string",
+          "required": true,
+          "description": "MBID or UPC used as identifier"
+        },
+        "identifier_type": {
+          "type": "string",
+          "required": true,
+          "description": "Type of identifier",
+          "enum": ["mbid", "upc"]
+        },
+        "cover_art_archive": {
+          "type": "array",
+          "items": {
+            "url": "string",
+            "thumbnail_500": "string",
+            "thumbnail_250": "string",
+            "width": "number",
+            "height": "number",
+            "is_front": "boolean",
+            "is_back": "boolean",
+            "types": "array",
+            "approved": "boolean"
+          },
+          "required": false,
+          "description": "Images from Cover Art Archive"
+        },
+        "spotify_images": {
+          "type": "array",
+          "items": {
+            "url": "string",
+            "width": "number",
+            "height": "number",
+            "size_category": "string"
+          },
+          "required": false,
+          "description": "Images from Spotify API"
+        },
+        "primary_image_url": {
+          "type": "string",
+          "required": false,
+          "description": "Best quality front cover image"
+        },
+        "thumbnail_url": {
+          "type": "string",
+          "required": false,
+          "description": "Thumbnail for quick display"
+        },
+        "ebay_url": {
+          "type": "string",
+          "required": false,
+          "description": "Optimized image URL for eBay listings"
+        },
+        "sources": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "Which APIs provided images",
+          "example": ["cover_art_archive", "spotify"]
+        },
+        "cached_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When images were cached"
+        },
+        "ttl": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Expiration time (30 days from cached_at)"
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["identifier_type", "identifier"],
+          "type": "composite"
+        },
+        {
+          "fields": ["ttl"],
+          "type": "single"
+        }
+      ]
+    },
+    "pricing_data": {
+      "description": "eBay sold listing prices and market analytics",
+      "document_id_strategy": "Composite key: {upc}_{condition}_{timestamp}",
+      "fields": {
+        "upc": {
+          "type": "string",
+          "required": true,
+          "description": "UPC barcode"
+        },
+        "title": {
+          "type": "string",
+          "required": false,
+          "description": "Album title for reference"
+        },
+        "artist": {
+          "type": "string",
+          "required": false,
+          "description": "Artist name for reference"
+        },
+        "condition": {
+          "type": "string",
+          "required": true,
+          "description": "Item condition",
+          "enum": ["New", "Like New", "Very Good", "Good", "Acceptable", "Used"]
+        },
+        "average_price": {
+          "type": "number",
+          "required": false,
+          "description": "Average sold price"
+        },
+        "median_price": {
+          "type": "number",
+          "required": false,
+          "description": "Median sold price"
+        },
+        "min_price": {
+          "type": "number",
+          "required": false,
+          "description": "Minimum sold price"
+        },
+        "max_price": {
+          "type": "number",
+          "required": false,
+          "description": "Maximum sold price"
+        },
+        "recommended_price": {
+          "type": "number",
+          "required": false,
+          "description": "Algorithm-recommended listing price"
+        },
+        "sample_size": {
+          "type": "number",
+          "required": true,
+          "description": "Number of sold items analyzed"
+        },
+        "confidence": {
+          "type": "string",
+          "required": true,
+          "description": "Confidence level in pricing data",
+          "enum": ["high", "medium", "low", "none"]
+        },
+        "price_strategy": {
+          "type": "string",
+          "required": false,
+          "description": "Strategy used for pricing",
+          "enum": ["competitive", "median", "conservative", "default"]
+        },
+        "currency": {
+          "type": "string",
+          "required": true,
+          "description": "Currency code",
+          "default": "USD"
+        },
+        "search_method": {
+          "type": "string",
+          "required": false,
+          "description": "How the pricing data was found",
+          "enum": ["upc", "artist_album", "album_only"]
+        },
+        "date_range_start": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Start of date range for sold items"
+        },
+        "date_range_end": {
+          "type": "timestamp",
+          "required": true,
+          "description": "End of date range for sold items"
+        },
+        "sample_listings": {
+          "type": "array",
+          "items": {
+            "title": "string",
+            "price": "number",
+            "condition": "string",
+            "end_time": "string",
+            "url": "string"
+          },
+          "required": false,
+          "description": "Sample of actual sold listings"
+        },
+        "cached_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When pricing was cached"
+        },
+        "ttl": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Expiration time (7 days from cached_at)"
+        }
+      },
+      "subcollections": {
+        "history": {
+          "description": "Individual sold listing records",
+          "fields": {
+            "item_id": "string",
+            "title": "string",
+            "price": "number",
+            "condition": "string",
+            "end_time": "timestamp",
+            "listing_type": "string",
+            "url": "string"
+          }
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["upc", "condition", "cached_at"],
+          "type": "composite",
+          "order": ["ASC", "ASC", "DESC"]
+        },
+        {
+          "fields": ["ttl"],
+          "type": "single"
+        }
+      ]
+    },
+    "oauth_tokens": {
+      "description": "OAuth tokens for Spotify and eBay APIs",
+      "document_id_strategy": "Service name as document ID (spotify, ebay)",
+      "fields": {
+        "service": {
+          "type": "string",
+          "required": true,
+          "description": "Service name",
+          "enum": ["spotify", "ebay"]
+        },
+        "access_token": {
+          "type": "string",
+          "required": true,
+          "description": "Encrypted access token",
+          "encrypted": true
+        },
+        "refresh_token": {
+          "type": "string",
+          "required": false,
+          "description": "Encrypted refresh token",
+          "encrypted": true
+        },
+        "expires_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Token expiration time"
+        },
+        "scope": {
+          "type": "array",
+          "items": "string",
+          "required": false,
+          "description": "OAuth scopes granted"
+        },
+        "token_type": {
+          "type": "string",
+          "required": true,
+          "description": "Type of token",
+          "default": "Bearer"
+        },
+        "created_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When token was created"
+        },
+        "updated_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Last update time"
+        },
+        "last_refreshed": {
+          "type": "timestamp",
+          "required": false,
+          "description": "Last refresh attempt"
+        }
+      },
+      "security_notes": "Implement Google Secret Manager for token storage instead of direct Firestore storage"
+    },
+    "draft_listings": {
+      "description": "eBay draft listings created through the Sell API",
+      "document_id_strategy": "eBay offer ID or SKU as document ID",
+      "fields": {
+        "offer_id": {
+          "type": "string",
+          "required": false,
+          "description": "eBay offer ID"
+        },
+        "sku": {
+          "type": "string",
+          "required": true,
+          "description": "Stock keeping unit",
+          "example": "CD_722975007524_20250818120000"
+        },
+        "upc": {
+          "type": "string",
+          "required": true,
+          "description": "UPC barcode"
+        },
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "Listing title"
+        },
+        "artist": {
+          "type": "string",
+          "required": false,
+          "description": "Artist name"
+        },
+        "album": {
+          "type": "string",
+          "required": false,
+          "description": "Album title"
+        },
+        "condition": {
+          "type": "string",
+          "required": true,
+          "description": "Item condition",
+          "default": "USED_VERY_GOOD"
+        },
+        "price": {
+          "type": "number",
+          "required": true,
+          "description": "Listing price"
+        },
+        "currency": {
+          "type": "string",
+          "required": true,
+          "description": "Currency code",
+          "default": "USD"
+        },
+        "quantity": {
+          "type": "number",
+          "required": true,
+          "description": "Available quantity",
+          "default": 1
+        },
+        "category_id": {
+          "type": "string",
+          "required": true,
+          "description": "eBay category ID",
+          "default": "176984"
+        },
+        "listing_format": {
+          "type": "string",
+          "required": true,
+          "description": "Listing format",
+          "default": "FIXED_PRICE"
+        },
+        "status": {
+          "type": "string",
+          "required": true,
+          "description": "Listing status",
+          "enum": ["draft", "published", "sold", "ended", "deleted"]
+        },
+        "primary_image_url": {
+          "type": "string",
+          "required": false,
+          "description": "Main listing image"
+        },
+        "fulfillment_policy_id": {
+          "type": "string",
+          "required": true,
+          "description": "eBay fulfillment policy"
+        },
+        "payment_policy_id": {
+          "type": "string",
+          "required": true,
+          "description": "eBay payment policy"
+        },
+        "return_policy_id": {
+          "type": "string",
+          "required": true,
+          "description": "eBay return policy"
+        },
+        "created_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When draft was created"
+        },
+        "updated_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Last update time"
+        },
+        "published_at": {
+          "type": "timestamp",
+          "required": false,
+          "description": "When listing was published"
+        },
+        "ended_at": {
+          "type": "timestamp",
+          "required": false,
+          "description": "When listing ended"
+        },
+        "ebay_item_id": {
+          "type": "string",
+          "required": false,
+          "description": "eBay item ID after publishing"
+        },
+        "listing_url": {
+          "type": "string",
+          "required": false,
+          "description": "Live listing URL"
+        },
+        "metadata": {
+          "type": "map",
+          "required": false,
+          "description": "Additional eBay-specific fields"
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["status", "created_at"],
+          "type": "composite",
+          "order": ["ASC", "DESC"]
+        },
+        {
+          "fields": ["upc"],
+          "type": "single"
+        },
+        {
+          "fields": ["sku"],
+          "type": "single"
+        }
+      ]
+    },
+    "batch_jobs": {
+      "description": "Track batch processing jobs and their status",
+      "document_id_strategy": "Auto-generated document ID",
+      "fields": {
+        "job_id": {
+          "type": "string",
+          "required": true,
+          "description": "Unique job identifier"
+        },
+        "type": {
+          "type": "string",
+          "required": true,
+          "description": "Type of batch job",
+          "enum": ["metadata_fetch", "image_fetch", "pricing_fetch", "draft_creation", "full_pipeline"]
+        },
+        "status": {
+          "type": "string",
+          "required": true,
+          "description": "Current job status",
+          "enum": ["pending", "processing", "completed", "failed", "cancelled"]
+        },
+        "total_items": {
+          "type": "number",
+          "required": true,
+          "description": "Total number of items to process"
+        },
+        "processed_items": {
+          "type": "number",
+          "required": true,
+          "description": "Number of items processed",
+          "default": 0
+        },
+        "successful_items": {
+          "type": "number",
+          "required": true,
+          "description": "Number of successful items",
+          "default": 0
+        },
+        "failed_items": {
+          "type": "number",
+          "required": true,
+          "description": "Number of failed items",
+          "default": 0
+        },
+        "input_source": {
+          "type": "string",
+          "required": false,
+          "description": "Source of input data (GCS path or local file)"
+        },
+        "input_data": {
+          "type": "array",
+          "items": "string",
+          "required": true,
+          "description": "List of UPCs or identifiers to process"
+        },
+        "results_summary": {
+          "type": "map",
+          "required": false,
+          "description": "Summary of processing results"
+        },
+        "error_log": {
+          "type": "array",
+          "items": {
+            "item": "string",
+            "error": "string",
+            "timestamp": "timestamp"
+          },
+          "required": false,
+          "description": "Log of errors encountered"
+        },
+        "processing_time_seconds": {
+          "type": "number",
+          "required": false,
+          "description": "Total processing time"
+        },
+        "started_at": {
+          "type": "timestamp",
+          "required": false,
+          "description": "Job start time"
+        },
+        "completed_at": {
+          "type": "timestamp",
+          "required": false,
+          "description": "Job completion time"
+        },
+        "created_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Job creation time"
+        },
+        "created_by": {
+          "type": "string",
+          "required": false,
+          "description": "User or system that created the job"
+        }
+      },
+      "subcollections": {
+        "items": {
+          "description": "Individual item processing status",
+          "fields": {
+            "item_id": "string",
+            "upc": "string",
+            "status": "string",
+            "metadata_fetched": "boolean",
+            "images_fetched": "boolean",
+            "pricing_fetched": "boolean",
+            "draft_created": "boolean",
+            "error": "string",
+            "processed_at": "timestamp"
+          }
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["type", "status", "created_at"],
+          "type": "composite",
+          "order": ["ASC", "ASC", "DESC"]
+        },
+        {
+          "fields": ["created_by", "created_at"],
+          "type": "composite",
+          "order": ["ASC", "DESC"]
+        }
+      ]
+    },
+    "api_logs": {
+      "description": "Log all API calls, responses, and errors for monitoring",
+      "document_id_strategy": "Auto-generated document ID",
+      "fields": {
+        "api_name": {
+          "type": "string",
+          "required": true,
+          "description": "Name of the API",
+          "enum": ["musicbrainz", "discogs", "cover_art_archive", "spotify", "ebay_finding", "ebay_sell"]
+        },
+        "endpoint": {
+          "type": "string",
+          "required": true,
+          "description": "API endpoint called"
+        },
+        "method": {
+          "type": "string",
+          "required": true,
+          "description": "HTTP method",
+          "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        },
+        "request_params": {
+          "type": "map",
+          "required": false,
+          "description": "Request parameters sent"
+        },
+        "request_body": {
+          "type": "map",
+          "required": false,
+          "description": "Request body for POST/PUT requests"
+        },
+        "response_status": {
+          "type": "number",
+          "required": true,
+          "description": "HTTP response status code"
+        },
+        "response_time_ms": {
+          "type": "number",
+          "required": true,
+          "description": "Response time in milliseconds"
+        },
+        "response_size_bytes": {
+          "type": "number",
+          "required": false,
+          "description": "Size of response in bytes"
+        },
+        "success": {
+          "type": "boolean",
+          "required": true,
+          "description": "Whether the API call was successful"
+        },
+        "error_message": {
+          "type": "string",
+          "required": false,
+          "description": "Error message if failed"
+        },
+        "error_type": {
+          "type": "string",
+          "required": false,
+          "description": "Type of error",
+          "enum": ["timeout", "rate_limit", "auth_error", "not_found", "server_error", "client_error"]
+        },
+        "batch_job_id": {
+          "type": "string",
+          "required": false,
+          "description": "Associated batch job ID"
+        },
+        "upc": {
+          "type": "string",
+          "required": false,
+          "description": "UPC being processed"
+        },
+        "timestamp": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When the API call was made"
+        },
+        "ttl": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Expiration time (7 days for success, 30 days for errors)"
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["api_name", "timestamp"],
+          "type": "composite",
+          "order": ["ASC", "DESC"]
+        },
+        {
+          "fields": ["batch_job_id"],
+          "type": "single"
+        },
+        {
+          "fields": ["success", "timestamp"],
+          "type": "composite",
+          "order": ["ASC", "DESC"]
+        },
+        {
+          "fields": ["ttl"],
+          "type": "single"
+        }
+      ]
+    },
+    "processed_files": {
+      "description": "Track files that have been processed to avoid duplicates",
+      "document_id_strategy": "File path or GCS URI as document ID",
+      "fields": {
+        "file_path": {
+          "type": "string",
+          "required": true,
+          "description": "Full path or GCS URI of the file"
+        },
+        "file_name": {
+          "type": "string",
+          "required": true,
+          "description": "File name"
+        },
+        "source_type": {
+          "type": "string",
+          "required": true,
+          "description": "Source type",
+          "enum": ["gcs", "local", "upload"]
+        },
+        "total_upcs": {
+          "type": "number",
+          "required": true,
+          "description": "Total UPCs in file"
+        },
+        "valid_upcs": {
+          "type": "number",
+          "required": true,
+          "description": "Valid UPCs found"
+        },
+        "processed_upcs": {
+          "type": "number",
+          "required": true,
+          "description": "UPCs successfully processed"
+        },
+        "batch_job_id": {
+          "type": "string",
+          "required": false,
+          "description": "Associated batch job ID"
+        },
+        "processed_at": {
+          "type": "timestamp",
+          "required": true,
+          "description": "When file was processed"
+        },
+        "processing_time_seconds": {
+          "type": "number",
+          "required": false,
+          "description": "Time taken to process"
+        },
+        "status": {
+          "type": "string",
+          "required": true,
+          "description": "Processing status",
+          "enum": ["completed", "partial", "failed"]
+        }
+      },
+      "indexes": [
+        {
+          "fields": ["source_type", "processed_at"],
+          "type": "composite",
+          "order": ["ASC", "DESC"]
+        }
+      ]
+    }
+  },
+  "security_rules": {
+    "description": "Firestore security rules configuration",
+    "service_accounts": [
+      {
+        "email": "draft-maker-identity@draft-maker-468923.iam.gserviceaccount.com",
+        "uid": "117616124807389754852",
+        "permissions": ["read", "write"]
+      },
+      {
+        "email": "github-actions@draft-maker-468923.iam.gserviceaccount.com",
+        "uid": "100850421393398263519",
+        "permissions": ["read"]
+      }
+    ]
+  },
+  "ttl_policies": {
+    "album_metadata": "30 days",
+    "album_images": "30 days",
+    "pricing_data": "7 days",
+    "api_logs_success": "7 days",
+    "api_logs_error": "30 days"
+  },
+  "backup_strategy": {
+    "frequency": "daily",
+    "retention": "30 days",
+    "export_bucket": "gs://draft-maker-bucket/firestore-backups"
+  }
+}

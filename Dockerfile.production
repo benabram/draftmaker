@@ -18,18 +18,28 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY data/ ./data/
 COPY main.py .
+COPY app.py .
 
 # Create necessary directories
 RUN mkdir -p logs output .tokens
 
+# Copy entrypoint script (if needed for batch mode)
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV APP_MODE=web
+ENV PORT=8080
 
 # Run as non-root user
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Default command
-ENTRYPOINT ["python", "main.py"]
+# Expose the port for Cloud Run
+EXPOSE 8080
+
+# Default command - run the web server
+CMD ["python", "main.py"]

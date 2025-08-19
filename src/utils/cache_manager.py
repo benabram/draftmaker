@@ -1,11 +1,11 @@
 """Cache management for MusicBrainz IDs and other frequently accessed data."""
 
 import json
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Any, Optional
 from pathlib import Path
-from src.config import settings, is_development
 from src.utils.logger import get_logger
+from src.config import settings, is_development
 
 try:
     from google.cloud import firestore
@@ -87,8 +87,8 @@ class CacheManager:
         cache_data = {
             "mbid": mbid,
             "upc": upc,
-            "cached_at": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(days=30),  # Cache for 30 days
+            "cached_at": datetime.now(timezone.utc),
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=30),  # Cache for 30 days
         }
         
         if metadata:
@@ -150,7 +150,13 @@ class CacheManager:
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
         
-        return datetime.utcnow() < expires_at
+        # Ensure both datetimes are timezone-aware for comparison
+        now = datetime.now(timezone.utc)
+        if expires_at.tzinfo is None:
+            # If expires_at is naive, assume UTC
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        return now < expires_at
     
     def _save_to_local(self, upc: str, data: Dict[str, Any]):
         """Save data to local cache file."""

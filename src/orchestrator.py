@@ -187,9 +187,10 @@ class ListingOrchestrator:
             logger.info(f"[{upc}] Fetching metadata...")
             metadata = await self.metadata_fetcher.fetch_metadata(upc)
             
-            if not metadata or not metadata.get("found"):
-                result["error"] = "No metadata found"
-                logger.warning(f"[{upc}] No metadata found")
+            # Check if metadata is complete (has at least title and artist)
+            if not metadata or not metadata.get("is_complete"):
+                result["error"] = "No metadata found or incomplete"
+                logger.warning(f"[{upc}] No metadata found or incomplete data")
                 return result
             
             result["metadata"] = metadata
@@ -217,7 +218,7 @@ class ListingOrchestrator:
             
             # Step 3: Fetch images
             logger.info(f"[{upc}] Fetching album images...")
-            images = await self.image_fetcher.fetch_images(upc, metadata)
+            images = await self.image_fetcher.fetch_images(metadata)
             
             if not images or not images.get("primary_image"):
                 logger.warning(f"[{upc}] No images found")

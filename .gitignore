@@ -48,6 +48,8 @@ ENV/
 env.bak/
 venv.bak/
 
+/venv
+
 # docker-compose.yml
 # docker-compose.override.yml
 
@@ -72,8 +74,22 @@ secrets.yml
 *.pem
 *.key
 
+# Service account keys
+*-sa-key.json
+github-actions-sa-key.json
+setup-github-secrets.sh
+
 # Token storage (local development)
 .tokens/
 
 # Cache storage (local development)
 .cache/
+
+# Service account keys
+keys/
+*.json
+service-account-key.json
+draft-maker-identity-key.json
+
+/output
+/logs
