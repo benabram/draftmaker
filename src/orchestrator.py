@@ -292,12 +292,14 @@ class ListingOrchestrator:
                 price = pricing.get("recommended_price", "")
                 
                 # Get draft info
-                draft = result.get("draft", {})
-                sku = draft.get("sku", "")
-                offer_id = draft.get("offer_id", "")
+                draft = result.get("draft") or {}
+                sku = draft.get("sku", "") if draft else ""
+                offer_id = draft.get("offer_id", "") if draft else ""
                 
                 # Get error
-                error = result.get("error", "").replace(",", ";").replace("\n", " ")
+                error = result.get("error") or ""
+                if error:
+                    error = error.replace(",", ";").replace("\n", " ")
                 
                 # Write row
                 f.write(f"{upc},{success},{artist},{album},{year},{price},{sku},{offer_id},{error}\n")
