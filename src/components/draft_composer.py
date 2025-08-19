@@ -210,11 +210,19 @@ class DraftComposer:
         description = self._build_description(metadata, pricing)
         inventory["product"]["description"] = description
         
-        # Set availability
+        # Set availability with location
         inventory["availability"] = {
             "shipToLocationAvailability": {
                 "quantity": 1
             }
+        }
+        
+        # Add location information (required for publishing)
+        inventory["location"] = {
+            "country": "US",
+            "postalCode": settings.seller_postal_code if hasattr(settings, 'seller_postal_code') else "91602",
+            "city": settings.seller_city if hasattr(settings, 'seller_city') else "North Hollywood",
+            "stateOrProvince": settings.seller_state if hasattr(settings, 'seller_state') else "CA"
         }
         
         return inventory
