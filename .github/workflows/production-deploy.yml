@@ -52,8 +52,8 @@ jobs:
           region: ${{ env.REGION }}
           # Point to the image you just pushed
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/image:latest
-          # Service account for Cloud Run service
-          service_account: draft-maker-identity@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          # Use flags to set service account and other options
+          flags: '--service-account=draft-maker-identity@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
           # Environment variables
           env_vars: |
             ENVIRONMENT=production
