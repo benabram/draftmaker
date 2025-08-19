@@ -281,8 +281,15 @@ class TokenManager:
         expires_at = token_data["expires_at"]
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
+        
+        # Handle both offset-naive and offset-aware datetimes
+        # If expires_at has timezone info, use timezone-aware comparison
+        if hasattr(expires_at, 'tzinfo') and expires_at.tzinfo is not None:
+            from datetime import timezone
+            buffer_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        else:
+            buffer_time = datetime.utcnow() + timedelta(minutes=5)
             
-        buffer_time = datetime.utcnow() + timedelta(minutes=5)
         return expires_at > buffer_time
 
 

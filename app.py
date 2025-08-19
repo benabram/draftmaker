@@ -376,6 +376,10 @@ async def oauth_status():
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
         
+        # Convert Firestore timestamp to datetime if needed
+        if hasattr(expires_at, '_seconds'):
+            expires_at = datetime.fromtimestamp(expires_at._seconds)
+        
         return JSONResponse(
             content={
                 "status": "configured",
