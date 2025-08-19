@@ -282,14 +282,18 @@ class ListingOrchestrator:
                 success = "Yes" if result.get("success") else "No"
                 
                 # Get metadata fields
-                metadata = result.get("metadata", {})
-                artist = metadata.get("artist_name", "").replace(",", ";")
-                album = metadata.get("title", "").replace(",", ";")
-                year = metadata.get("year", "")
+                metadata = result.get("metadata") or {}
+                artist = metadata.get("artist_name", "") if metadata else ""
+                if artist:
+                    artist = artist.replace(",", ";")
+                album = metadata.get("title", "") if metadata else ""
+                if album:
+                    album = album.replace(",", ";")
+                year = metadata.get("year", "") if metadata else ""
                 
                 # Get pricing
-                pricing = result.get("pricing", {})
-                price = pricing.get("recommended_price", "")
+                pricing = result.get("pricing") or {}
+                price = pricing.get("recommended_price", "") if pricing else ""
                 
                 # Get draft info
                 draft = result.get("draft") or {}
