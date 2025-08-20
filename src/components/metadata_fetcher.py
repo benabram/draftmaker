@@ -388,6 +388,14 @@ class MetadataFetcher:
         # Add UPC
         combined["upc"] = upc
         
+        # Extract year from date if we don't have it (for MusicBrainz data)
+        if not combined.get("year") and combined.get("date"):
+            # Extract year from date field (MusicBrainz uses date, not year)
+            date_str = combined.get("date", "")
+            if len(date_str) >= 4:
+                combined["year"] = date_str[:4]
+                logger.debug(f"Extracted year {combined['year']} from date {date_str}")
+        
         # Supplement with Discogs data where MusicBrainz is missing
         if discogs_data:
             # Add Discogs-specific fields
@@ -403,11 +411,10 @@ class MetadataFetcher:
             if not combined.get("artist_name"):
                 combined["artist_name"] = discogs_data.get("artist_name")
             
+            # Use Discogs year if we still don't have one
             if not combined.get("year") and discogs_data.get("year"):
                 combined["year"] = str(discogs_data["year"])
-            elif not combined.get("year") and combined.get("date"):
-                # Extract year from date
-                combined["year"] = combined["date"][:4] if len(combined.get("date", "")) >= 4 else None
+                logger.debug(f"Using Discogs year: {combined['year']}")
             
             if not combined.get("label_name"):
                 combined["label_name"] = discogs_data.get("label_name")
