@@ -210,10 +210,10 @@ class DraftComposer:
         aspects["Type"] = [metadata.get("release_type", "Album")]
         
         # Set CD Grading (already set in template, but ensure it's "Excellent Condition")
-        aspects["CD Grading"] = ["Excellent Condition"]
+        aspects["CD Grading"] = ["Excellent (EX)"]
         
         # Add Case Condition as a separate aspect
-        aspects["Case Condition"] = ["Excellent"]
+        aspects["Case Condition"] = ["Excellent (EX)"]
         
         # Set Language to English
         aspects["Language"] = ["English"]
@@ -354,9 +354,15 @@ class DraftComposer:
             "<p>The CD, Cover and Case are in Excellent condition.</p>"
         )
         description_parts.append(
-            "<p>The listing image is the official release cover art. If a CD or its cover and jewel case "
-            "are not in the described condition, we will issue a full refund on receipt of refund request "
-            "and proof images.</p>"
+            """
+            <p><b>☆ Why a Stock Photo? Because Our Quality is Guaranteed. ☆</b></p>
+            <p>To bring you a huge selection of music daily, we use high-quality stock images.<br>
+            Every CD we sell meets the same strict standard, so you know exactly what you're getting every time.</p>
+            <p><b>DISCS:</b> Professionally cleaned or resurfaced. Guaranteed to play perfectly. EX &rarr; NM<br>
+            <b>JEWEL CASES:</b> All worn cases are replaced with brand new ones.<br>
+            <b>ARTWORK:</b> All original inserts are included and in Excellent condition.</p>
+            <p>We're Top Rated Plus sellers with 100% Positive Feedback for a reason. Buy with absolute confidence.</p>
+            """
         )
         
         # Add track listing after the condition text block
