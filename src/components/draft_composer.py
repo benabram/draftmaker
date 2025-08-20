@@ -278,15 +278,25 @@ class DraftComposer:
         # Set SKU
         offer["sku"] = sku
         
-        # Set pricing
+        # Set pricing with Best Offer properly configured
         recommended_price = pricing.get("recommended_price", 9.99)
         offer["pricingSummary"]["price"]["value"] = str(recommended_price)
         
-        # Verify bestOfferEnabled is preserved
-        if "bestOfferEnabled" in offer.get("pricingSummary", {}):
-            logger.debug(f"Best Offer enabled: {offer['pricingSummary']['bestOfferEnabled']}")
-        else:
-            logger.warning("bestOfferEnabled field not found in offer pricingSummary")
+        # Ensure Best Offer is properly set (eBay API requires this exact structure)
+        offer["pricingSummary"]["bestOfferEnabled"] = True
+        
+        # Optional: Set auto-accept/decline prices for Best Offer
+        # You can configure these based on business rules
+        # offer["pricingSummary"]["bestOfferAutoAcceptPrice"] = {
+        #     "value": str(recommended_price * 0.85),  # Auto-accept at 85% of asking
+        #     "currency": "USD"
+        # }
+        # offer["pricingSummary"]["bestOfferAutoDeclinePrice"] = {
+        #     "value": str(recommended_price * 0.50),  # Auto-decline below 50%
+        #     "currency": "USD"
+        # }
+        
+        logger.info(f"Best Offer enabled: {offer['pricingSummary'].get('bestOfferEnabled', False)}")
         
         # Available quantity is always 1 for individual CDs
         offer["availableQuantity"] = 1
