@@ -30,8 +30,7 @@
       "price": {
         "value": "<average_price>",
         "currency": "USD"
-      },
-      "bestOfferEnabled": true
+      }
     },
     "listingPolicies": {
       "fulfillmentPolicyId": "381603015022",
