@@ -121,6 +121,32 @@ class MetadataFetcher:
                 # Extract the first release if searching
                 if "releases" in data and data["releases"]:
                     release = data["releases"][0]
+                    
+                    # Search results don't include full track data, need to fetch full release
+                    release_mbid = release.get("id")
+                    if release_mbid:
+                        logger.debug(f"Fetching full release details for MBID: {release_mbid}")
+                        await asyncio.sleep(1.1)  # Rate limit
+                        
+                        # Fetch full release with all details including tracks
+                        full_url = f"{MUSICBRAINZ_BASE_URL}/release/{release_mbid}"
+                        full_params = {
+                            "fmt": "json",
+                            "inc": "artists+labels+recordings+release-groups+media+discids"
+                        }
+                        
+                        full_response = await client.get(
+                            full_url,
+                            params=full_params,
+                            headers=self.musicbrainz_headers,
+                            timeout=30.0
+                        )
+                        
+                        if full_response.status_code == 200:
+                            release = full_response.json()
+                            logger.info(f"Fetched full release with tracks for UPC: {upc}")
+                        else:
+                            logger.warning(f"Could not fetch full release details, using search result")
                 else:
                     release = data
                 
@@ -317,6 +343,20 @@ class MetadataFetcher:
             metadata["artists"] = artists
             metadata["artist_name"] = artists[0]["name"] if artists else None
         
+        # Parse extraartists (producers, engineers, etc.)
+        if "extraartists" in release and release["extraartists"]:
+            producers = []
+            for extra in release["extraartists"]:
+                role = extra.get("role", "").lower()
+                # Check for producer roles
+                if "producer" in role or "produced by" in role:
+                    producers.append(extra.get("name"))
+            
+            if producers:
+                # Join multiple producers with comma
+                metadata["producer"] = ", ".join(producers)
+                logger.debug(f"Found producer(s) from Discogs: {metadata['producer']}")
+        
         # Parse label information
         if "labels" in release and release["labels"]:
             labels = []
@@ -431,6 +471,11 @@ class MetadataFetcher:
             if not combined.get("tracks") and discogs_data.get("tracks"):
                 combined["tracks"] = discogs_data["tracks"]
                 combined["track_count"] = discogs_data.get("track_count")
+            
+            # Add producer if we found one from Discogs
+            if not combined.get("producer") and discogs_data.get("producer"):
+                combined["producer"] = discogs_data["producer"]
+                logger.debug(f"Using Discogs producer: {combined['producer']}")
         
         # Add metadata sources
         sources = []
