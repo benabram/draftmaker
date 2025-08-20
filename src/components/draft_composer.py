@@ -278,25 +278,20 @@ class DraftComposer:
         # Set SKU
         offer["sku"] = sku
         
-        # Set pricing with Best Offer properly configured
+        # Set pricing
         recommended_price = pricing.get("recommended_price", 9.99)
         offer["pricingSummary"]["price"]["value"] = str(recommended_price)
         
-        # Ensure Best Offer is properly set (eBay API requires this exact structure)
-        offer["pricingSummary"]["bestOfferEnabled"] = True
+        # Remove bestOfferEnabled from pricingSummary if it exists (wrong location)
+        if "bestOfferEnabled" in offer["pricingSummary"]:
+            del offer["pricingSummary"]["bestOfferEnabled"]
         
-        # Optional: Set auto-accept/decline prices for Best Offer
-        # You can configure these based on business rules
-        # offer["pricingSummary"]["bestOfferAutoAcceptPrice"] = {
-        #     "value": str(recommended_price * 0.85),  # Auto-accept at 85% of asking
-        #     "currency": "USD"
-        # }
-        # offer["pricingSummary"]["bestOfferAutoDeclinePrice"] = {
-        #     "value": str(recommended_price * 0.50),  # Auto-decline below 50%
-        #     "currency": "USD"
-        # }
+        # Add Best Offer configuration at the correct level (offer level, not in pricingSummary)
+        offer["bestOfferTerms"] = {
+            "bestOfferEnabled": True
+        }
         
-        logger.info(f"Best Offer enabled: {offer['pricingSummary'].get('bestOfferEnabled', False)}")
+        logger.info(f"Best Offer enabled: {offer.get('bestOfferTerms', {}).get('bestOfferEnabled', False)}")
         
         # Available quantity is always 1 for individual CDs
         offer["availableQuantity"] = 1
@@ -439,6 +434,11 @@ class DraftComposer:
             "Content-Language": "en-US"
         }
         
+        # Log the payload being sent to eBay
+        logger.info(f"Creating offer with payload:")
+        logger.info(f"  SKU: {payload.get('sku')}")
+        logger.info(f"  PricingSummary: {json.dumps(payload.get('pricingSummary', {}), indent=2)}")
+        
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -451,6 +451,11 @@ class DraftComposer:
                 if response.status_code in [200, 201]:
                     result = response.json()
                     logger.info(f"Successfully created offer with ID: {result.get('offerId')}")
+                    
+                    # Log what eBay returned
+                    if 'pricingSummary' in result:
+                        logger.info(f"Returned pricingSummary: {json.dumps(result['pricingSummary'], indent=2)}")
+                    
                     return result
                 else:
                     logger.error(f"Failed to create offer. Status: {response.status_code}")
