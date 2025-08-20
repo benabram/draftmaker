@@ -199,9 +199,24 @@ class DraftComposer:
         if catalog:
             aspects["Catalog Number"] = [catalog]
         
+        # Add Producer if available in metadata
+        producer = metadata.get("producer", "")
+        if producer:
+            aspects["Producer"] = [producer]
+            logger.debug(f"Set Producer aspect to: {producer}")
+        
         # Set format details
         aspects["Format"] = ["CD"]
         aspects["Type"] = [metadata.get("release_type", "Album")]
+        
+        # Set CD Grading (already set in template, but ensure it's "Excellent Condition")
+        aspects["CD Grading"] = ["Excellent Condition"]
+        
+        # Add Case Condition as a separate aspect
+        aspects["Case Condition"] = ["Excellent"]
+        
+        # Set Language to English
+        aspects["Language"] = ["English"]
         
         # Remove "Features" if not sealed
         if "Features" in aspects:
@@ -320,9 +335,9 @@ class DraftComposer:
             f"<h3>{artist} - {album}</h3>"
         ]
         
-        # Add new condition and refund text block
+        # Add new condition and refund text block (removed "Case may have punch holes.")
         description_parts.append(
-            "<p>The CD, Cover and Case are in Excellent condition. Case may have punch holes.</p>"
+            "<p>The CD, Cover and Case are in Excellent condition.</p>"
         )
         description_parts.append(
             "<p>The listing image is the official release cover art. If a CD or its cover and jewel case "
@@ -330,14 +345,7 @@ class DraftComposer:
             "and proof images.</p>"
         )
         
-        # Add album details (without Label, Number of Tracks, and Genre)
-        if year:
-            description_parts.append(f"<p><strong>Release Year:</strong> {year}</p>")
-        
-        if catalog:
-            description_parts.append(f"<p><strong>Catalog Number:</strong> {catalog}</p>")
-        
-        # Add track listing if available
+        # Add track listing after the condition text block
         if metadata.get("tracks") and len(metadata["tracks"]) > 0:
             description_parts.append("<p><strong>Track Listing:</strong></p>")
             description_parts.append("<ol>")
@@ -347,6 +355,10 @@ class DraftComposer:
             if len(metadata["tracks"]) > 20:
                 description_parts.append(f"<li>... and {len(metadata['tracks']) - 20} more tracks</li>")
             description_parts.append("</ol>")
+        
+        # Add catalog number after track listing
+        if catalog:
+            description_parts.append(f"<p><strong>Catalog Number:</strong> {catalog}</p>")
         
         # Add standard footer
         description_parts.append(
