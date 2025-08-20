@@ -159,7 +159,7 @@ async def test_create_offer_with_best_offer(access_token: str):
         
         print(f"Created inventory item with SKU: {test_sku}")
         
-        # Now create an offer with Best Offer enabled
+        # Now create an offer with Best Offer enabled using CORRECT structure
         offer_url = f"{EBAY_API_BASE_URL}/sell/inventory/v1/offer"
         
         offer_payload = {
@@ -170,13 +170,15 @@ async def test_create_offer_with_best_offer(access_token: str):
                 "price": {
                     "value": "19.99",
                     "currency": "USD"
-                },
-                "bestOfferEnabled": True,  # Explicitly enable Best Offer
-                "bestOfferAutoAcceptPrice": {
+                }
+            },
+            "bestOfferTerms": {  # CORRECT: Best Offer at offer level, not in pricingSummary
+                "bestOfferEnabled": True,
+                "autoAcceptPrice": {
                     "value": "15.00",
                     "currency": "USD"
                 },
-                "bestOfferAutoDeclinePrice": {
+                "autoDeclinePrice": {
                     "value": "10.00",
                     "currency": "USD"
                 }
@@ -191,7 +193,8 @@ async def test_create_offer_with_best_offer(access_token: str):
         }
         
         print(f"\nCreating offer with Best Offer enabled...")
-        print(f"Payload: {json.dumps(offer_payload['pricingSummary'], indent=2)}")
+        print(f"Pricing Summary: {json.dumps(offer_payload['pricingSummary'], indent=2)}")
+        print(f"Best Offer Terms: {json.dumps(offer_payload.get('bestOfferTerms', {}), indent=2)}")
         
         response = await client.post(
             offer_url,
