@@ -321,6 +321,10 @@ class DraftComposer:
         # Set merchant location key for the offer
         offer["merchantLocationKey"] = "DEFAULT_LOCATION"
         
+        # Add store category names (your eBay store's custom categories)
+        # This adds the item to your store's "CD" category
+        offer["storeCategoryNames"] = ["CD"]
+        
         return offer
     
     def _build_description(self, metadata: Dict[str, Any], pricing: Dict[str, Any]) -> str:
@@ -443,6 +447,7 @@ class DraftComposer:
         logger.info(f"Creating offer with payload:")
         logger.info(f"  SKU: {payload.get('sku')}")
         logger.info(f"  PricingSummary: {json.dumps(payload.get('pricingSummary', {}), indent=2)}")
+        logger.info(f"  Store Category Names: {payload.get('storeCategoryNames', [])}")
         
         try:
             async with httpx.AsyncClient() as client:
