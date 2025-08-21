@@ -20,13 +20,25 @@ logger = get_logger(__name__)
 class ListingOrchestrator:
     """Orchestrates the entire listing creation process."""
     
-    def __init__(self):
-        """Initialize the orchestrator with all components."""
+    def __init__(self, job_id: str = None):
+        """Initialize the orchestrator with all components.
+        
+        Args:
+            job_id: Optional batch job ID for checkpointing
+        """
         self.upc_processor = get_upc_processor()
         self.metadata_fetcher = get_metadata_fetcher()
         self.pricing_fetcher = get_pricing_fetcher()
         self.image_fetcher = get_image_fetcher()
         self.draft_composer = get_draft_composer()
+        self.job_id = job_id
+        
+        # Initialize batch job manager if job_id is provided
+        if self.job_id:
+            from src.utils.batch_job_manager import get_batch_job_manager
+            self.batch_job_manager = get_batch_job_manager()
+        else:
+            self.batch_job_manager = None
         
         # Create output directory for results
         self.output_dir = Path("output")
@@ -89,17 +101,40 @@ class ListingOrchestrator:
         
         logger.info(f"Loaded {len(upcs)} valid UPCs for processing")
         
+        # Check if we should resume from a checkpoint
+        start_index = 0
+        if self.batch_job_manager and self.job_id:
+            start_index = self.batch_job_manager.get_resume_index(self.job_id)
+            if start_index > 0:
+                logger.info(f"Resuming from checkpoint at index {start_index}")
+            # Update total UPCs in job
+            self.batch_job_manager.update_job(self.job_id, {"total_upcs": len(upcs)})
+        
         # Process each UPC
         results = []
         successful = 0
         failed = 0
         
-        for i, upc in enumerate(upcs, 1):
-            logger.info(f"Processing UPC {i}/{len(upcs)}: {upc}")
+        for i, upc in enumerate(upcs):
+            # Skip already processed UPCs if resuming
+            if i < start_index:
+                continue
+            
+            logger.info(f"Processing UPC {i+1}/{len(upcs)}: {upc}")
             
             try:
                 result = await self.process_single_upc(upc, create_drafts)
                 results.append(result)
+                
+                # Add checkpoint after processing each UPC
+                if self.batch_job_manager and self.job_id:
+                    self.batch_job_manager.add_checkpoint(
+                        self.job_id,
+                        i,  # Current index
+                        upc,
+                        result["success"],
+                        result
+                    )
                 
                 if result["success"]:
                     successful += 1
@@ -109,17 +144,28 @@ class ListingOrchestrator:
                     logger.warning(f"✗ Failed to process UPC {upc}: {result.get('error')}")
                 
                 # Add a small delay between requests to avoid rate limiting
-                if i < len(upcs):
+                if i < len(upcs) - 1:
                     await asyncio.sleep(1)
                     
             except Exception as e:
                 logger.error(f"Unexpected error processing UPC {upc}: {e}")
                 failed += 1
-                results.append({
+                result = {
                     "upc": upc,
                     "success": False,
                     "error": str(e)
-                })
+                }
+                results.append(result)
+                
+                # Add checkpoint for failed UPC
+                if self.batch_job_manager and self.job_id:
+                    self.batch_job_manager.add_checkpoint(
+                        self.job_id,
+                        i,
+                        upc,
+                        False,
+                        result
+                    )
         
         # Calculate processing time
         end_time = datetime.utcnow()
