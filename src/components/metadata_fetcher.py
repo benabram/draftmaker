@@ -253,19 +253,15 @@ class MetadataFetcher:
         # Search for release by barcode
         search_url = f"{DISCOGS_BASE_URL}/database/search"
         params = {
-            "type": "release",
-            "barcode": upc
+            "barcode": upc,
+            "type": "release"
         }
         
-        # Prepare Discogs authentication
-        # Discogs uses OAuth 1.0a but also accepts simple key/secret in query params
+        # Prepare Discogs authentication with personal access token
         headers = {
-            "User-Agent": settings.musicbrainz_user_agent  # Use same user agent
+            "User-Agent": "draftmaker/1.0 +https://draft-maker-541660382374.us-west1.run.app",
+            "Authorization": f"Discogs token={settings.discogs_personal_access_token}"
         }
-        
-        # Add authentication to params instead of headers
-        params["key"] = settings.discogs_consumer_key
-        params["secret"] = settings.discogs_consumer_secret
         
         try:
             async with httpx.AsyncClient() as client:
@@ -297,17 +293,10 @@ class MetadataFetcher:
                 # Fetch detailed release information
                 release_url = f"{DISCOGS_BASE_URL}/releases/{release_id}"
                 
-                # Add authentication params for this request too
-                release_params = {
-                    "key": settings.discogs_consumer_key,
-                    "secret": settings.discogs_consumer_secret
-                }
-                
                 await asyncio.sleep(1)  # Rate limiting
                 
                 response = await client.get(
                     release_url,
-                    params=release_params,
                     headers=headers,
                     timeout=30.0
                 )

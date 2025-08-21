@@ -31,7 +31,9 @@ def mock_environment():
         "EBAY_PAYMENT_POLICY_ID": "test_payment",
         "EBAY_RETURN_POLICY_ID": "test_return",
         "EBAY_CATEGORY_ID": "176984",
-        "DISCOGS_TOKEN": "test_discogs_token",
+        "DISCOGS_PERSONAL_ACCESS_TOKEN": "test_discogs_personal_token",
+        "DISCOGS_CONSUMER_KEY": "test_consumer_key",
+        "DISCOGS_CONSUMER_SECRET": "test_consumer_secret",
         "SPOTIFY_CLIENT_ID": "test_spotify_id",
         "SPOTIFY_CLIENT_SECRET": "test_spotify_secret",
         "GOOGLE_APPLICATION_CREDENTIALS": "test_credentials.json"

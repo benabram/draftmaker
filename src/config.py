@@ -38,11 +38,16 @@ class Settings(BaseSettings):
     )
     
     # API Credentials
-    # Discogs
+    # Discogs (Legacy - kept for backwards compatibility)
     discogs_consumer_key: str = Field(default=os.getenv("DISCOGS_CONSUMER_KEY", ""), env="DISCOGS_CONSUMER_KEY")
     discogs_consumer_secret: str = Field(
         default=os.getenv("DISCOGS_CONSUMER_SECRET", ""),
         env="DISCOGS_CONSUMER_SECRET"
+    )
+    # Discogs Personal Access Token (New - preferred authentication method)
+    discogs_personal_access_token: str = Field(
+        default=os.getenv("DISCOGS_PERSONAL_ACCESS_TOKEN", ""),
+        env="DISCOGS_PERSONAL_ACCESS_TOKEN"
     )
     
     # eBay
