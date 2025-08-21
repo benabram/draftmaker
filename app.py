@@ -25,6 +25,7 @@ import json
 from src.config import settings
 from src.utils.token_manager import get_token_manager
 from src.utils.logger import get_logger
+from src.utils.batch_job_manager import get_batch_job_manager
 from src.orchestrator import ListingOrchestrator
 
 logger = get_logger(__name__)
@@ -41,8 +42,8 @@ EBAY_AUTH_URL = "https://auth.ebay.com/oauth2/authorize"
 EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 REDIRECT_URI = "https://draft-maker-541660382374.us-west1.run.app/oauth/callback"
 
-# Store for batch job status (in production, use database)
-batch_jobs = {}
+# Initialize batch job manager with Firestore persistence
+batch_job_manager = get_batch_job_manager()
 
 # Pydantic models for request/response
 class BatchProcessRequest(BaseModel):
@@ -460,19 +461,24 @@ async def trigger_batch_processing(
             detail="Invalid GCS path. Must start with gs://"
         )
     
-    # Generate job ID
-    job_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(batch_jobs)}"
+    # Generate job ID with timestamp
+    job_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{datetime.now().microsecond}"
     
-    # Create job status
+    # Create job in Firestore
+    job_data = batch_job_manager.create_job(
+        job_id=job_id,
+        gcs_path=request.gcs_path,
+        create_drafts=request.create_drafts,
+        test_mode=request.test_mode
+    )
+    
+    # Convert to BatchJobStatus for response
     job_status = BatchJobStatus(
         job_id=job_id,
         status="pending",
         gcs_path=request.gcs_path,
-        started_at=datetime.now()
+        started_at=job_data.get("created_at")
     )
-    
-    # Store job status
-    batch_jobs[job_id] = job_status.dict()
     
     # Add background task to process batch
     background_tasks.add_task(
@@ -499,13 +505,26 @@ async def get_batch_job_status(job_id: str):
     Returns:
         Current status of the batch job
     """
-    if job_id not in batch_jobs:
+    job = batch_job_manager.get_job(job_id)
+    if not job:
         raise HTTPException(
             status_code=404,
             detail=f"Job {job_id} not found"
         )
     
-    return BatchJobStatus(**batch_jobs[job_id])
+    # Map Firestore fields to BatchJobStatus model
+    return BatchJobStatus(
+        job_id=job.get("job_id"),
+        status=job.get("status"),
+        gcs_path=job.get("gcs_path"),
+        started_at=job.get("started_at"),
+        completed_at=job.get("completed_at"),
+        total_upcs=job.get("total_upcs"),
+        successful=job.get("successful_upcs"),
+        failed=job.get("failed_upcs"),
+        error=job.get("error"),
+        results=job.get("results")
+    )
 
 
 @app.get("/api/batch/jobs")
@@ -523,23 +542,100 @@ async def list_batch_jobs(
     Returns:
         List of batch jobs
     """
-    jobs = list(batch_jobs.values())
+    # Get jobs from Firestore
+    jobs = batch_job_manager.list_jobs(
+        limit=limit,
+        status=status,
+        order_by="created_at",
+        descending=True
+    )
     
-    # Filter by status if provided
-    if status:
-        jobs = [j for j in jobs if j["status"] == status]
-    
-    # Sort by started_at descending (newest first)
-    jobs.sort(key=lambda x: x.get("started_at", ""), reverse=True)
-    
-    # Limit results
-    jobs = jobs[:limit]
+    # Convert to response format
+    job_responses = []
+    for job in jobs:
+        job_responses.append({
+            "job_id": job.get("job_id"),
+            "status": job.get("status"),
+            "gcs_path": job.get("gcs_path"),
+            "started_at": job.get("started_at"),
+            "completed_at": job.get("completed_at"),
+            "total_upcs": job.get("total_upcs"),
+            "successful": job.get("successful_upcs"),
+            "failed": job.get("failed_upcs"),
+            "error": job.get("error")
+        })
     
     return {
-        "total": len(batch_jobs),
-        "filtered": len(jobs),
-        "jobs": jobs
+        "total": len(job_responses),
+        "filtered": len(job_responses),
+        "jobs": job_responses
     }
+
+
+@app.post("/api/batch/recover/{job_id}")
+async def recover_batch_job(
+    job_id: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Recover a failed or interrupted batch job.
+    
+    Args:
+        job_id: The job ID to recover
+        background_tasks: FastAPI background tasks handler
+        
+    Returns:
+        Batch job status after recovery initiation
+    """
+    # Get the job from Firestore
+    job = batch_job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job {job_id} not found"
+        )
+    
+    # Check if job is already running
+    if job.get("status") == "running":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job {job_id} is already running"
+        )
+    
+    # Check if job is already completed
+    if job.get("status") == "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job {job_id} is already completed"
+        )
+    
+    # Mark job for recovery
+    batch_job_manager.mark_job_for_recovery(job_id)
+    
+    # Add background task to resume processing
+    background_tasks.add_task(
+        run_batch_processing_task,
+        job_id,
+        job.get("gcs_path"),
+        job.get("create_drafts", True),
+        job.get("test_mode", False)
+    )
+    
+    logger.info(f"Batch job {job_id} marked for recovery and queued for processing")
+    
+    # Return updated status
+    return BatchJobStatus(
+        job_id=job_id,
+        status="pending",
+        gcs_path=job.get("gcs_path"),
+        started_at=job.get("started_at"),
+        completed_at=None,
+        total_upcs=job.get("total_upcs"),
+        successful=job.get("successful_upcs"),
+        failed=job.get("failed_upcs"),
+        error=None,
+        results=None
+    )
 
 
 @app.get("/health")
@@ -547,10 +643,20 @@ async def health_check():
     """
     Health check endpoint for monitoring.
     """
+    # Check Firestore connectivity
+    firestore_healthy = True
+    try:
+        # Try to list one job to verify Firestore connection
+        batch_job_manager.list_jobs(limit=1)
+    except Exception as e:
+        logger.error(f"Firestore health check failed: {e}")
+        firestore_healthy = False
+    
     return {
-        "status": "healthy",
+        "status": "healthy" if firestore_healthy else "degraded",
         "timestamp": datetime.now().isoformat(),
-        "environment": os.getenv("ENVIRONMENT", "unknown")
+        "environment": os.getenv("ENVIRONMENT", "unknown"),
+        "firestore": "connected" if firestore_healthy else "disconnected"
     }
 
 
@@ -572,12 +678,12 @@ def run_batch_processing_task(
     """
     logger.info(f"Starting batch processing job {job_id}")
     
-    # Update job status to running
-    batch_jobs[job_id]["status"] = "running"
+    # Update job status to running in Firestore
+    batch_job_manager.update_job_status(job_id, "running")
     
     try:
-        # Initialize orchestrator
-        orchestrator = ListingOrchestrator()
+        # Initialize orchestrator with job_id for checkpointing
+        orchestrator = ListingOrchestrator(job_id=job_id)
         
         # Run batch processing using asyncio.run() to handle async in sync context
         results = asyncio.run(orchestrator.process_batch(
@@ -587,13 +693,13 @@ def run_batch_processing_task(
             is_gcs=True
         ))
         
-        # Update job status with results
-        batch_jobs[job_id].update({
+        # Update job status with results in Firestore
+        batch_job_manager.update_job(job_id, {
             "status": "completed",
             "completed_at": datetime.now(),
             "total_upcs": results.get("total_upcs", 0),
-            "successful": results.get("successful", 0),
-            "failed": results.get("failed", 0),
+            "successful_upcs": results.get("successful", 0),
+            "failed_upcs": results.get("failed", 0),
             "results": results
         })
         
@@ -601,11 +707,11 @@ def run_batch_processing_task(
         
     except Exception as e:
         logger.error(f"Batch job {job_id} failed with error: {str(e)}", exc_info=True)
-        batch_jobs[job_id].update({
-            "status": "failed",
-            "completed_at": datetime.now(),
-            "error": str(e)
-        })
+        batch_job_manager.update_job_status(
+            job_id, 
+            "failed", 
+            error=str(e)
+        )
 
 
 if __name__ == "__main__":

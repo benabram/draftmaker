@@ -257,10 +257,14 @@ class MetadataFetcher:
         }
         
         # Prepare Discogs authentication
+        # Discogs uses OAuth 1.0a but also accepts simple key/secret in query params
         headers = {
-            "User-Agent": settings.musicbrainz_user_agent,  # Use same user agent
-            "Authorization": f"Discogs key={settings.discogs_consumer_key}, secret={settings.discogs_consumer_secret}"
+            "User-Agent": settings.musicbrainz_user_agent  # Use same user agent
         }
+        
+        # Add authentication to params instead of headers
+        params["key"] = settings.discogs_consumer_key
+        params["secret"] = settings.discogs_consumer_secret
         
         try:
             async with httpx.AsyncClient() as client:
@@ -292,10 +296,17 @@ class MetadataFetcher:
                 # Fetch detailed release information
                 release_url = f"{DISCOGS_BASE_URL}/releases/{release_id}"
                 
+                # Add authentication params for this request too
+                release_params = {
+                    "key": settings.discogs_consumer_key,
+                    "secret": settings.discogs_consumer_secret
+                }
+                
                 await asyncio.sleep(1)  # Rate limiting
                 
                 response = await client.get(
                     release_url,
+                    params=release_params,
                     headers=headers,
                     timeout=30.0
                 )
