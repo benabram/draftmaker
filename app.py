@@ -7,7 +7,7 @@ import os
 import sys
 import base64
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
 
 # Add project root to path
@@ -70,7 +70,8 @@ class BatchJobStatus(BaseModel):
     successful: Optional[int] = None
     failed: Optional[int] = None
     error: Optional[str] = None
-    results: Optional[dict] = None
+    # Accept both a summary dict and per-UPC list to match Firestore schema during lifecycle
+    results: Optional[Union[dict, list]] = None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -746,12 +747,18 @@ def create_batch_processing_task(
     return response
 
 
+# Request body for Cloud Tasks execute endpoint
+class ExecuteBatchRequest(BaseModel):
+    job_id: str
+    gcs_path: str
+    create_drafts: bool = True
+    test_mode: bool = False
+
+
 @app.post("/api/batch/execute")
 async def execute_batch_processing(
-    job_id: str,
-    gcs_path: str,
-    create_drafts: bool = True,
-    test_mode: bool = False
+    payload: ExecuteBatchRequest,
+    background_tasks: BackgroundTasks
 ):
     """
     Execute batch processing (called by Cloud Tasks).
@@ -767,12 +774,18 @@ async def execute_batch_processing(
     # Cloud Tasks sets specific headers we can check
     # For now, we'll process the request
     
-    logger.info(f"Executing batch job {job_id} from Cloud Task")
+    logger.info(f"Executing batch job {payload.job_id} from Cloud Task")
     
-    # Run the batch processing
-    run_batch_processing_task(job_id, gcs_path, create_drafts, test_mode)
+    # Run the batch processing in the background to avoid blocking the request
+    background_tasks.add_task(
+        run_batch_processing_task,
+        payload.job_id,
+        payload.gcs_path,
+        payload.create_drafts,
+        payload.test_mode,
+    )
     
-    return {"status": "processing", "job_id": job_id}
+    return {"status": "queued", "job_id": payload.job_id}
 
 
 def run_batch_processing_task(
