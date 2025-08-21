@@ -7,6 +7,48 @@ import json
 from datetime import datetime
 from google.cloud import firestore
 from src.config import settings, is_production
+import re
+
+
+class CredentialSanitizerFilter(logging.Filter):
+    """Filter to sanitize sensitive credentials from log messages."""
+    
+    def filter(self, record):
+        """Filter and sanitize log records."""
+        # Patterns to sanitize
+        patterns = [
+            # Discogs API credentials in URLs
+            (r'key=[^&\s]+', 'key=***REDACTED***'),
+            (r'secret=[^&\s]+', 'secret=***REDACTED***'),
+            # OAuth tokens
+            (r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', 'Bearer ***REDACTED***'),
+            (r'access_token=[^&\s]+', 'access_token=***REDACTED***'),
+            (r'refresh_token=[^&\s]+', 'refresh_token=***REDACTED***'),
+            # API keys in various formats
+            (r'api_key=[^&\s]+', 'api_key=***REDACTED***'),
+            (r'apikey=[^&\s]+', 'apikey=***REDACTED***'),
+            # eBay specific
+            (r'SECURITY-APPNAME=[^&\s]+', 'SECURITY-APPNAME=***REDACTED***'),
+        ]
+        
+        # Sanitize the message
+        if hasattr(record, 'msg'):
+            msg = str(record.msg)
+            for pattern, replacement in patterns:
+                msg = re.sub(pattern, replacement, msg, flags=re.IGNORECASE)
+            record.msg = msg
+            
+        # Also sanitize args if present
+        if hasattr(record, 'args') and record.args:
+            sanitized_args = []
+            for arg in record.args:
+                arg_str = str(arg)
+                for pattern, replacement in patterns:
+                    arg_str = re.sub(pattern, replacement, arg_str, flags=re.IGNORECASE)
+                sanitized_args.append(arg_str)
+            record.args = tuple(sanitized_args)
+            
+        return True
 
 
 class CloudRunFormatter(logging.Formatter):
@@ -71,6 +113,10 @@ def setup_logging(log_level: Optional[str] = None) -> logging.Logger:
     
     console_handler.setFormatter(formatter)
     
+    # Add credential sanitizer filter to the handler
+    sanitizer_filter = CredentialSanitizerFilter()
+    console_handler.addFilter(sanitizer_filter)
+    
     # Configure root logger
     root_logger.setLevel(getattr(logging, level.upper()))
     root_logger.addHandler(console_handler)
@@ -78,7 +124,9 @@ def setup_logging(log_level: Optional[str] = None) -> logging.Logger:
     # Reduce noise from third-party libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("google").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.INFO)
+    # Set httpx to WARNING to suppress HTTP request logs that might contain credentials
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     
     return root_logger
 

@@ -6,7 +6,7 @@ This function should be triggered by Cloud Scheduler every 5-10 minutes.
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 import requests
 from google.cloud import firestore
@@ -44,7 +44,8 @@ class BatchHealthMonitor:
             List of stuck job IDs
         """
         stuck_jobs = []
-        timeout_threshold = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+        # Use timezone-aware datetime for comparison with Firestore timestamps
+        timeout_threshold = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
         
         try:
             # Query for running jobs
@@ -59,6 +60,9 @@ class BatchHealthMonitor:
                 if last_heartbeat:
                     if isinstance(last_heartbeat, str):
                         last_heartbeat = datetime.fromisoformat(last_heartbeat)
+                    # Ensure heartbeat is timezone-aware
+                    if last_heartbeat.tzinfo is None:
+                        last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
                     if last_heartbeat > timeout_threshold:
                         logger.info(f"Job {job_id} has recent heartbeat, skipping")
                         continue
@@ -67,6 +71,10 @@ class BatchHealthMonitor:
                 last_update = job_data.get("updated_at")
                 if isinstance(last_update, str):
                     last_update = datetime.fromisoformat(last_update)
+                
+                # Ensure last_update is timezone-aware
+                if last_update and last_update.tzinfo is None:
+                    last_update = last_update.replace(tzinfo=timezone.utc)
                 
                 if last_update and last_update < timeout_threshold:
                     # Check if there are recent checkpoints
@@ -78,6 +86,9 @@ class BatchHealthMonitor:
                             checkpoint_time = checkpoint.get("timestamp")
                             if isinstance(checkpoint_time, str):
                                 checkpoint_time = datetime.fromisoformat(checkpoint_time)
+                            # Ensure checkpoint_time is timezone-aware
+                            if checkpoint_time and checkpoint_time.tzinfo is None:
+                                checkpoint_time = checkpoint_time.replace(tzinfo=timezone.utc)
                             if checkpoint_time and checkpoint_time > timeout_threshold:
                                 recent_checkpoint = True
                                 break
@@ -110,7 +121,7 @@ class BatchHealthMonitor:
             doc_ref.update({
                 "status": "failed",
                 "error": "Job stuck - instance likely terminated (auto-detected)",
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now(timezone.utc)
             })
             logger.info(f"Marked job {job_id} as failed for recovery")
             return True
@@ -151,7 +162,7 @@ class BatchHealthMonitor:
             Summary of actions taken
         """
         results = {
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
             "stuck_jobs": [],
             "recovered": [],
             "failed_to_recover": []
