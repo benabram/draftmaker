@@ -261,6 +261,11 @@ class MetadataFetcher:
         Returns:
             Discogs metadata
         """
+        # Check if personal access token is available
+        if not settings.discogs_personal_access_token:
+            logger.warning(f"Discogs Personal Access Token not configured, skipping Discogs search for UPC: {upc}")
+            return {}
+        
         # Search for release by barcode
         search_url = f"{DISCOGS_BASE_URL}/database/search"
         params = {
@@ -268,15 +273,11 @@ class MetadataFetcher:
             "barcode": upc
         }
         
-        # Prepare Discogs authentication
-        # Discogs uses OAuth 1.0a but also accepts simple key/secret in query params
+        # Prepare Discogs authentication using Personal Access Token
         headers = {
-            "User-Agent": settings.musicbrainz_user_agent  # Use same user agent
+            "User-Agent": settings.musicbrainz_user_agent,
+            "Authorization": f"Discogs token={settings.discogs_personal_access_token}"
         }
-        
-        # Add authentication to params instead of headers
-        params["key"] = settings.discogs_consumer_key
-        params["secret"] = settings.discogs_consumer_secret
         
         try:
             async with httpx.AsyncClient() as client:
@@ -308,18 +309,11 @@ class MetadataFetcher:
                 # Fetch detailed release information
                 release_url = f"{DISCOGS_BASE_URL}/releases/{release_id}"
                 
-                # Add authentication params for this request too
-                release_params = {
-                    "key": settings.discogs_consumer_key,
-                    "secret": settings.discogs_consumer_secret
-                }
-                
                 await asyncio.sleep(1)  # Rate limiting
                 
                 response = await client.get(
                     release_url,
-                    params=release_params,
-                    headers=headers,
+                    headers=headers,  # Headers already contain the Authorization token
                     timeout=30.0
                 )
                 

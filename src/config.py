@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         default=os.getenv("DISCOGS_CONSUMER_SECRET", ""),
         env="DISCOGS_CONSUMER_SECRET"
     )
+    discogs_personal_access_token: Optional[str] = Field(
+        default=os.getenv("DISCOGS_PERSONAL_ACCESS_TOKEN", None),
+        env="DISCOGS_PERSONAL_ACCESS_TOKEN"
+    )
     
     # eBay
     ebay_app_id: str = Field(default=os.getenv("EBAY_APP_ID", ""), env="EBAY_APP_ID")
