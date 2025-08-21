@@ -1,0 +1,46 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: draft-maker
+  labels:
+    cloud.googleapis.com/location: us-west1
+spec:
+  template:
+    metadata:
+      annotations:
+        # Maximum number of instances
+        autoscaling.knative.dev/maxScale: "10"
+        # Minimum number of instances (0 allows scaling to zero)
+        autoscaling.knative.dev/minScale: "0"
+        # CPU allocation - always allocated to prevent cold starts for batch processing
+        run.googleapis.com/cpu-throttling: "false"
+        # Increase timeout for batch processing (max 60 minutes for Cloud Run)
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      # Set container concurrency
+      containerConcurrency: 100
+      # Timeout for requests (3600 seconds = 60 minutes)
+      timeoutSeconds: 3600
+      serviceAccountName: draft-maker-sa@draft-maker-468923.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/draft-maker-468923/draft-maker:latest
+        resources:
+          limits:
+            # Increase memory for batch processing
+            memory: 2Gi
+            cpu: "2"
+          requests:
+            memory: 1Gi
+            cpu: "1"
+        env:
+        - name: ENVIRONMENT
+          value: production
+        - name: GCP_PROJECT_ID
+          value: draft-maker-468923
+        - name: GCP_REGION
+          value: us-west1
+        - name: STORAGE_BUCKET_NAME
+          value: draft-maker-bucket
+        ports:
+        - containerPort: 8080
+          name: http1
