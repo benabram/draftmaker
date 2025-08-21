@@ -120,7 +120,13 @@ class MetadataFetcher:
                 data = response.json()
                 
                 # Extract the first release if searching
-                if "releases" in data and data["releases"]:
+                if "releases" in data:
+                    # Check if we have any releases
+                    if not data["releases"]:
+                        # No releases found - return empty dict to indicate no data
+                        logger.info(f"No MusicBrainz releases found for UPC: {upc}")
+                        return {}
+                    
                     release = data["releases"][0]
                     
                     # Search results don't include full track data, need to fetch full release
@@ -148,8 +154,13 @@ class MetadataFetcher:
                             logger.info(f"Fetched full release with tracks for UPC: {upc}")
                         else:
                             logger.warning(f"Could not fetch full release details, using search result")
-                else:
+                elif mbid:
+                    # This was a direct MBID lookup, not a search
                     release = data
+                else:
+                    # Unexpected response format
+                    logger.warning(f"Unexpected MusicBrainz response format for UPC: {upc}")
+                    return {}
                 
                 return self._parse_musicbrainz_response(release)
                 
@@ -491,11 +502,12 @@ class MetadataFetcher:
                 combined["producer"] = discogs_data["producer"]
                 logger.debug(f"Using Discogs producer: {combined['producer']}")
         
-        # Add metadata sources
+        # Add metadata sources - only include sources that actually provided data
         sources = []
-        if musicbrainz_data:
+        # Check if MusicBrainz provided actual data (not just empty/None values)
+        if musicbrainz_data and (musicbrainz_data.get("title") or musicbrainz_data.get("artist_name") or musicbrainz_data.get("mbid")):
             sources.append("musicbrainz")
-        if discogs_data:
+        if discogs_data and (discogs_data.get("title") or discogs_data.get("artist_name") or discogs_data.get("discogs_id")):
             sources.append("discogs")
         combined["metadata_sources"] = sources
         
