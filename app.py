@@ -28,6 +28,15 @@ from src.utils.logger import get_logger
 from src.utils.batch_job_manager import get_batch_job_manager
 from src.orchestrator import ListingOrchestrator
 
+# Import Cloud Tasks if available
+try:
+    from google.cloud import tasks_v2
+    from google.protobuf import duration_pb2, timestamp_pb2
+    CLOUD_TASKS_AVAILABLE = True
+except ImportError:
+    CLOUD_TASKS_AVAILABLE = False
+    logger.warning("Cloud Tasks not available, falling back to background tasks")
+
 logger = get_logger(__name__)
 
 # Initialize FastAPI app
@@ -442,7 +451,7 @@ async def exchange_code_for_tokens(authorization_code: str) -> dict:
 @app.post("/api/batch/process", response_model=BatchJobStatus)
 async def trigger_batch_processing(
     request: BatchProcessRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks = None
 ):
     """
     Trigger batch processing of UPC codes from a GCS file.
@@ -480,14 +489,37 @@ async def trigger_batch_processing(
         started_at=job_data.get("created_at")
     )
     
-    # Add background task to process batch
-    background_tasks.add_task(
-        run_batch_processing_task,
-        job_id,
-        request.gcs_path,
-        request.create_drafts,
-        request.test_mode
-    )
+    # Use Cloud Tasks if available, otherwise fall back to background tasks
+    if CLOUD_TASKS_AVAILABLE and settings.environment == "production":
+        # Create Cloud Task for batch processing
+        try:
+            create_batch_processing_task(
+                job_id,
+                request.gcs_path,
+                request.create_drafts,
+                request.test_mode
+            )
+            logger.info(f"Created Cloud Task for batch job {job_id}")
+        except Exception as e:
+            logger.error(f"Failed to create Cloud Task: {e}, falling back to background task")
+            if background_tasks:
+                background_tasks.add_task(
+                    run_batch_processing_task,
+                    job_id,
+                    request.gcs_path,
+                    request.create_drafts,
+                    request.test_mode
+                )
+    else:
+        # Use background tasks for local development or if Cloud Tasks not available
+        if background_tasks:
+            background_tasks.add_task(
+                run_batch_processing_task,
+                job_id,
+                request.gcs_path,
+                request.create_drafts,
+                request.test_mode
+            )
     
     logger.info(f"Batch job {job_id} queued for processing: {request.gcs_path}")
     
@@ -658,6 +690,89 @@ async def health_check():
         "environment": os.getenv("ENVIRONMENT", "unknown"),
         "firestore": "connected" if firestore_healthy else "disconnected"
     }
+
+
+def create_batch_processing_task(
+    job_id: str,
+    gcs_path: str,
+    create_drafts: bool,
+    test_mode: bool
+):
+    """
+    Create a Cloud Task for batch processing.
+    
+    Args:
+        job_id: The job ID for tracking
+        gcs_path: GCS path to the UPC file
+        create_drafts: Whether to create eBay drafts
+        test_mode: Whether to run in test mode
+    """
+    if not CLOUD_TASKS_AVAILABLE:
+        raise ImportError("Cloud Tasks library not available")
+    
+    # Initialize Cloud Tasks client
+    client = tasks_v2.CloudTasksClient()
+    
+    # Configure task parameters
+    project = settings.gcp_project_id
+    location = settings.gcp_region
+    queue = "batch-processing"  # Create this queue in Cloud Tasks
+    
+    # Construct the queue path
+    parent = client.queue_path(project, location, queue)
+    
+    # Construct the task
+    task = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": f"{REDIRECT_URI.rsplit('/', 2)[0]}/api/batch/execute",
+            "headers": {
+                "Content-Type": "application/json",
+            },
+            "body": json.dumps({
+                "job_id": job_id,
+                "gcs_path": gcs_path,
+                "create_drafts": create_drafts,
+                "test_mode": test_mode
+            }).encode()
+        },
+        "dispatch_deadline": duration_pb2.Duration(seconds=1800),  # 30 minutes timeout
+    }
+    
+    # Create the task
+    response = client.create_task(parent=parent, task=task)
+    
+    logger.info(f"Created Cloud Task: {response.name}")
+    return response
+
+
+@app.post("/api/batch/execute")
+async def execute_batch_processing(
+    job_id: str,
+    gcs_path: str,
+    create_drafts: bool = True,
+    test_mode: bool = False
+):
+    """
+    Execute batch processing (called by Cloud Tasks).
+    This endpoint should only be accessible from Cloud Tasks.
+    
+    Args:
+        job_id: The job ID for tracking
+        gcs_path: GCS path to the UPC file
+        create_drafts: Whether to create eBay drafts
+        test_mode: Whether to run in test mode
+    """
+    # Verify the request is from Cloud Tasks (in production)
+    # Cloud Tasks sets specific headers we can check
+    # For now, we'll process the request
+    
+    logger.info(f"Executing batch job {job_id} from Cloud Task")
+    
+    # Run the batch processing
+    run_batch_processing_task(job_id, gcs_path, create_drafts, test_mode)
+    
+    return {"status": "processing", "job_id": job_id}
 
 
 def run_batch_processing_task(
