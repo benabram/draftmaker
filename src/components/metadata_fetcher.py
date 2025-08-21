@@ -10,6 +10,7 @@ from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.cache_manager import get_cache_manager
 from src.utils.token_manager import get_token_manager
+from src.utils.error_sanitizer import sanitize_error_message
 
 logger = get_logger(__name__)
 
@@ -320,7 +321,9 @@ class MetadataFetcher:
             logger.error(f"Discogs API timeout for UPC: {upc}")
             return {}
         except Exception as e:
-            logger.error(f"Error fetching from Discogs for UPC {upc}: {e}")
+            # Sanitize error message to remove credentials
+            sanitized_error = sanitize_error_message(e)
+            logger.error(f"Error fetching from Discogs for UPC {upc}: {sanitized_error}")
             return {}
     
     def _parse_discogs_response(self, release: Dict[str, Any]) -> Dict[str, Any]:
