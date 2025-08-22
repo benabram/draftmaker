@@ -63,7 +63,9 @@ class MetadataFetcher:
             # Use MBID if available, otherwise use None (for Discogs-only metadata)
             mbid = metadata.get("mbid", None)
             await self.cache_manager.set_mbid(upc, mbid, metadata)
-            logger.debug(f"Cached metadata for UPC {upc} (MBID: {mbid or 'None - Discogs only'})")
+            logger.debug(
+                f"Cached metadata for UPC {upc} (MBID: {mbid or 'None - Discogs only'})"
+            )
         else:
             logger.debug(f"Not caching incomplete metadata for UPC {upc}")
 
@@ -298,8 +300,7 @@ class MetadataFetcher:
         # Prepare Discogs authentication using Personal Access Token
         headers = {
             "User-Agent": settings.musicbrainz_user_agent,
-            "Authorization": 
-                f"Discogs token={settings.discogs_personal_access_token}",
+            "Authorization": f"Discogs token={settings.discogs_personal_access_token}",
         }
 
         try:
