@@ -26,17 +26,17 @@ EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 
 class EbayAuthSetup:
     """Helper class for eBay OAuth setup."""
-    
+
     def __init__(self):
         """Initialize the auth setup."""
         self.auth_url = EBAY_AUTH_URL
         self.token_url = EBAY_TOKEN_URL
         self.redirect_uri = "https://draft-maker-541660382374.us-west1.run.app/oauth/callback"  # Default redirect URI
-        
+
     def generate_auth_url(self) -> str:
         """
         Generate the authorization URL for user consent.
-        
+
         Returns:
             The authorization URL
         """
@@ -45,49 +45,51 @@ class EbayAuthSetup:
             "response_type": "code",
             "redirect_uri": self.redirect_uri,
             "scope": "https://api.ebay.com/oauth/api_scope/sell.inventory",
-            "prompt": "login"
+            "prompt": "login",
         }
-        
+
         return f"{self.auth_url}?{urlencode(params)}"
-        
+
     async def exchange_code_for_tokens(self, authorization_code: str) -> dict:
         """
         Exchange authorization code for access and refresh tokens.
-        
+
         Args:
             authorization_code: The authorization code from eBay
-            
+
         Returns:
             Token response from eBay
         """
         # Prepare credentials
         credentials = f"{settings.ebay_app_id}:{settings.ebay_cert_id}"
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
-        
+
         headers = {
             "Authorization": f"Basic {encoded_credentials}",
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded",
         }
-        
+
         data = {
             "grant_type": "authorization_code",
             "code": authorization_code,
-            "redirect_uri": self.redirect_uri
+            "redirect_uri": self.redirect_uri,
         }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(self.token_url, headers=headers, data=data)
-            
+
             if response.status_code != 200:
                 logger.error(f"Token exchange failed: {response.text}")
-                raise Exception(f"Failed to exchange code for tokens: {response.status_code}")
-                
+                raise Exception(
+                    f"Failed to exchange code for tokens: {response.status_code}"
+                )
+
         return response.json()
-        
+
     async def setup_initial_tokens(self, authorization_code: str):
         """
         Complete the initial token setup process.
-        
+
         Args:
             authorization_code: The authorization code from eBay
         """
@@ -95,18 +97,20 @@ class EbayAuthSetup:
             # Exchange code for tokens
             logger.info("Exchanging authorization code for tokens...")
             token_response = await self.exchange_code_for_tokens(authorization_code)
-            
+
             # Save tokens using token manager
             token_manager = get_token_manager()
             await token_manager.set_initial_ebay_token(
                 access_token=token_response["access_token"],
                 refresh_token=token_response["refresh_token"],
-                expires_in=token_response["expires_in"]
+                expires_in=token_response["expires_in"],
             )
-            
+
             logger.info("✅ eBay tokens successfully saved!")
-            logger.info(f"Access token expires in {token_response['expires_in']} seconds")
-            
+            logger.info(
+                f"Access token expires in {token_response['expires_in']} seconds"
+            )
+
         except Exception as e:
             logger.error(f"Failed to setup tokens: {e}")
             raise
@@ -114,12 +118,12 @@ class EbayAuthSetup:
 
 async def main():
     """Main CLI function."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("eBay OAuth Setup Utility (Production)")
-    print("="*60 + "\n")
-    
+    print("=" * 60 + "\n")
+
     setup = EbayAuthSetup()
-    
+
     print("Step 1: Authorization")
     print("-" * 40)
     print("Please visit the following URL to authorize the application:")
@@ -130,21 +134,21 @@ async def main():
     print("After authorizing, you will be redirected to a URL that looks like:")
     print("https://draft-maker-541660382374.us-west1.run.app/oauth/callback")
     print()
-    
+
     # Get the authorization code from user
     auth_code = input("Enter the authorization code from the redirect URL: ").strip()
-    
+
     if not auth_code:
         print("❌ No authorization code provided. Exiting.")
         sys.exit(1)
-        
+
     print("\nStep 2: Token Exchange")
     print("-" * 40)
-    
+
     await setup.setup_initial_tokens(auth_code)
-    
+
     print("\n✅ Setup complete! The application can now use eBay APIs.")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def run_cli():
@@ -162,6 +166,9 @@ def run_cli():
 if __name__ == "__main__":
     # Add parent directory to path for imports
     import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+
     run_cli()
