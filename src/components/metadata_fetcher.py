@@ -120,7 +120,13 @@ class MetadataFetcher:
                 data = response.json()
                 
                 # Extract the first release if searching
-                if "releases" in data and data["releases"]:
+                if "releases" in data:
+                    # Check if we have any releases
+                    if not data["releases"]:
+                        # No releases found - return empty dict to indicate no data
+                        logger.info(f"No MusicBrainz releases found for UPC: {upc}")
+                        return {}
+                    
                     release = data["releases"][0]
                     
                     # Search results don't include full track data, need to fetch full release
@@ -148,8 +154,13 @@ class MetadataFetcher:
                             logger.info(f"Fetched full release with tracks for UPC: {upc}")
                         else:
                             logger.warning(f"Could not fetch full release details, using search result")
-                else:
+                elif mbid:
+                    # This was a direct MBID lookup, not a search
                     release = data
+                else:
+                    # Unexpected response format
+                    logger.warning(f"Unexpected MusicBrainz response format for UPC: {upc}")
+                    return {}
                 
                 return self._parse_musicbrainz_response(release)
                 
@@ -250,16 +261,21 @@ class MetadataFetcher:
         Returns:
             Discogs metadata
         """
+        # Check if personal access token is available
+        if not settings.discogs_personal_access_token:
+            logger.warning(f"Discogs Personal Access Token not configured, skipping Discogs search for UPC: {upc}")
+            return {}
+        
         # Search for release by barcode
         search_url = f"{DISCOGS_BASE_URL}/database/search"
         params = {
-            "barcode": upc,
-            "type": "release"
+            "type": "release",
+            "barcode": upc
         }
         
-        # Prepare Discogs authentication with personal access token
+        # Prepare Discogs authentication using Personal Access Token
         headers = {
-            "User-Agent": "draftmaker/1.0 +https://draft-maker-541660382374.us-west1.run.app",
+            "User-Agent": settings.musicbrainz_user_agent,
             "Authorization": f"Discogs token={settings.discogs_personal_access_token}"
         }
         
@@ -297,7 +313,7 @@ class MetadataFetcher:
                 
                 response = await client.get(
                     release_url,
-                    headers=headers,
+                    headers=headers,  # Headers already contain the Authorization token
                     timeout=30.0
                 )
                 
@@ -309,9 +325,15 @@ class MetadataFetcher:
         except httpx.TimeoutException:
             logger.error(f"Discogs API timeout for UPC: {upc}")
             return {}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                logger.error(f"Discogs API authentication failed for UPC {upc}: 401 Unauthorized. Please check the personal access token.")
+            else:
+                logger.error(f"Discogs API HTTP error for UPC {upc}: {e.response.status_code} - {e.response.text}")
+            return {}
         except Exception as e:
             # Sanitize error message to remove credentials
-            sanitized_error = sanitize_error_message(e)
+            sanitized_error = sanitize_error_message(str(e))
             logger.error(f"Error fetching from Discogs for UPC {upc}: {sanitized_error}")
             return {}
     
@@ -480,11 +502,12 @@ class MetadataFetcher:
                 combined["producer"] = discogs_data["producer"]
                 logger.debug(f"Using Discogs producer: {combined['producer']}")
         
-        # Add metadata sources
+        # Add metadata sources - only include sources that actually provided data
         sources = []
-        if musicbrainz_data:
+        # Check if MusicBrainz provided actual data (not just empty/None values)
+        if musicbrainz_data and (musicbrainz_data.get("title") or musicbrainz_data.get("artist_name") or musicbrainz_data.get("mbid")):
             sources.append("musicbrainz")
-        if discogs_data:
+        if discogs_data and (discogs_data.get("title") or discogs_data.get("artist_name") or discogs_data.get("discogs_id")):
             sources.append("discogs")
         combined["metadata_sources"] = sources
         

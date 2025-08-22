@@ -89,7 +89,10 @@ class ImageFetcher:
     
     async def _fetch_from_cover_art_archive(self, mbid: str) -> List[Dict[str, Any]]:
         """
-        Fetch images from Cover Art Archive.
+        Fetch images from Cover Art Archive using direct image URLs.
+        
+        This optimized version directly fetches front cover images at specific
+        resolutions (500px, 250px, 1000px) instead of fetching the full JSON metadata.
         
         Args:
             mbid: MusicBrainz Release ID
@@ -97,69 +100,80 @@ class ImageFetcher:
         Returns:
             List of image dictionaries
         """
-        url = f"{COVER_ART_ARCHIVE_BASE_URL}/release/{mbid}"
+        # Priority order for image sizes: 500 -> 250 -> 1000
+        sizes = ["500", "250", "1000"]
+        images = []
         
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url,
-                    headers={"User-Agent": settings.musicbrainz_user_agent},
-                    timeout=30.0,
-                    follow_redirects=True
-                )
+        async with httpx.AsyncClient() as client:
+            for size in sizes:
+                url = f"{COVER_ART_ARCHIVE_BASE_URL}/release/{mbid}/front-{size}.jpg"
                 
-                if response.status_code == 404:
-                    logger.warning(f"No cover art found for MBID: {mbid}")
-                    return []
-                
-                if response.status_code == 503:
-                    logger.warning(f"Cover Art Archive unavailable for MBID: {mbid}")
-                    return []
-                
-                response.raise_for_status()
-                data = response.json()
-                
-                # Parse the response
-                images = []
-                for img in data.get("images", []):
-                    image_info = {
-                        "url": img.get("image"),  # Full size image
-                        "thumbnail_500": img.get("thumbnails", {}).get("500"),
-                        "thumbnail_250": img.get("thumbnails", {}).get("250"),
-                        "thumbnail_large": img.get("thumbnails", {}).get("large"),
-                        "thumbnail_small": img.get("thumbnails", {}).get("small"),
-                        "is_front": img.get("front", False),
-                        "is_back": img.get("back", False),
-                        "comment": img.get("comment", ""),
-                        "types": img.get("types", []),
-                        "approved": img.get("approved", False),
-                        "source": "cover_art_archive"
-                    }
+                try:
+                    logger.debug(f"Attempting to fetch {size}px front cover for MBID: {mbid}")
                     
-                    # Prefer 500px thumbnail for eBay listings
-                    if image_info["thumbnail_500"]:
-                        image_info["ebay_url"] = image_info["thumbnail_500"]
-                    elif image_info["thumbnail_large"]:
-                        image_info["ebay_url"] = image_info["thumbnail_large"]
+                    response = await client.get(
+                        url,
+                        headers={"User-Agent": settings.musicbrainz_user_agent},
+                        timeout=10.0,  # Reduced timeout for individual requests
+                        follow_redirects=True
+                    )
+                    
+                    if response.status_code == 200:
+                        # Successfully found an image at this resolution
+                        logger.info(f"Found {size}px front cover for MBID: {mbid}")
+                        
+                        # Create image info structure to maintain backward compatibility
+                        image_info = {
+                            "url": url,  # Direct URL to the image
+                            "thumbnail_500": url if size == "500" else None,
+                            "thumbnail_250": url if size == "250" else None,
+                            "thumbnail_large": url if size == "1000" else None,
+                            "thumbnail_small": None,  # Not fetching small thumbnails
+                            "is_front": True,  # We're specifically fetching front covers
+                            "is_back": False,
+                            "comment": f"Front cover at {size}px",
+                            "types": ["Front"],
+                            "approved": True,  # Direct URLs are typically approved images
+                            "source": "cover_art_archive",
+                            "ebay_url": url,  # Use the direct URL for eBay
+                            "size_px": int(size)
+                        }
+                        
+                        images.append(image_info)
+                        
+                        # We found an image, so we can return immediately
+                        # This ensures we use the highest priority size available
+                        return images
+                        
+                    elif response.status_code == 404:
+                        logger.debug(f"No {size}px front cover available for MBID: {mbid}")
+                        # Continue to try the next size
+                        continue
+                        
+                    elif response.status_code == 503:
+                        logger.warning(f"Cover Art Archive unavailable while fetching {size}px image for MBID: {mbid}")
+                        # Service unavailable, no point trying other sizes
+                        return []
+                        
                     else:
-                        image_info["ebay_url"] = image_info["url"]
+                        logger.warning(f"Unexpected status {response.status_code} for {size}px image, MBID: {mbid}")
+                        continue
+                        
+                except httpx.TimeoutException:
+                    logger.warning(f"Timeout fetching {size}px image for MBID: {mbid}")
+                    # Continue to try the next size
+                    continue
                     
-                    images.append(image_info)
-                
-                # Sort images: front first, approved first
-                images.sort(key=lambda x: (
-                    not x.get("is_front", False),
-                    not x.get("approved", False)
-                ))
-                
-                return images
-                
-        except httpx.TimeoutException:
-            logger.error(f"Cover Art Archive timeout for MBID: {mbid}")
-            return []
-        except Exception as e:
-            logger.error(f"Error fetching from Cover Art Archive for MBID {mbid}: {e}")
-            return []
+                except Exception as e:
+                    logger.error(f"Error fetching {size}px image for MBID {mbid}: {e}")
+                    # Continue to try the next size
+                    continue
+        
+        # If we've tried all sizes and found nothing
+        if not images:
+            logger.warning(f"No front cover art found at any resolution for MBID: {mbid}")
+        
+        return images
     
     async def _fetch_from_spotify(self, upc: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
