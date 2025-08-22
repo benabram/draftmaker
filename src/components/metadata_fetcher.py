@@ -1,10 +1,9 @@
 """Metadata fetcher component for MusicBrainz and Discogs APIs."""
 
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 from datetime import datetime
 import httpx
-from urllib.parse import quote
 
 from src.config import settings
 from src.utils.logger import get_logger
@@ -299,7 +298,8 @@ class MetadataFetcher:
         # Prepare Discogs authentication using Personal Access Token
         headers = {
             "User-Agent": settings.musicbrainz_user_agent,
-            "Authorization": f"Discogs token={settings.discogs_personal_access_token}",
+            "Authorization": 
+                f"Discogs token={settings.discogs_personal_access_token}",
         }
 
         try:
@@ -378,7 +378,8 @@ class MetadataFetcher:
                 # Retry on 500 errors with exponential backoff
                 wait_time = (2**retry_count) * 2
                 logger.warning(
-                    f"Discogs API 500 error, retrying in {wait_time} seconds (attempt {retry_count + 1}/2)"
+                    f"Discogs API 500 error, retrying in {wait_time}s "
+                    f"(attempt {retry_count + 1}/2)"
                 )
                 await asyncio.sleep(wait_time)
                 return await self._fetch_from_discogs(upc, retry_count + 1)

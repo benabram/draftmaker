@@ -12,9 +12,9 @@ import argparse
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import settings, is_development
-from src.utils.logger import get_logger, setup_logging
-from google.cloud import storage, firestore
+from google.cloud import storage, firestore  # noqa: E402
+from src.config import settings, is_development  # noqa: E402
+from src.utils.logger import get_logger, setup_logging  # noqa: E402
 
 setup_logging("INFO")
 logger = get_logger(__name__)
@@ -22,11 +22,11 @@ logger = get_logger(__name__)
 
 class CacheCleaner:
     """Utility to clean cache entries for specific UPCs."""
-    
+
     def __init__(self):
         """Initialize cache cleaner."""
         self.is_dev = is_development()
-        
+
         if self.is_dev:
             # Local cache directory
             self.cache_dir = Path(__file__).parent.parent / ".cache"
@@ -36,19 +36,19 @@ class CacheCleaner:
             self.db = firestore.Client(project=settings.gcp_project_id)
             self.collection = settings.firestore_collection_mbid
             logger.info(f"Using Firestore collection: {self.collection}")
-    
+
     def clear_local_cache(self, upc: str) -> bool:
         """
         Clear local cache for a specific UPC.
-        
+
         Args:
             upc: The UPC to clear
-            
+
         Returns:
             True if cache was cleared, False if it didn't exist
         """
         cache_file = self.cache_dir / f"{upc}.json"
-        
+
         if cache_file.exists():
             try:
                 cache_file.unlink()
@@ -60,21 +60,21 @@ class CacheCleaner:
         else:
             logger.info(f"  No local cache found for UPC: {upc}")
             return False
-    
+
     async def clear_firestore_cache(self, upc: str) -> bool:
         """
         Clear Firestore cache for a specific UPC.
-        
+
         Args:
             upc: The UPC to clear
-            
+
         Returns:
             True if cache was cleared, False if it didn't exist
         """
         try:
             doc_ref = self.db.collection(self.collection).document(upc)
             doc = doc_ref.get()
-            
+
             if doc.exists:
                 doc_ref.delete()
                 logger.info(f"✓ Cleared Firestore cache for UPC: {upc}")
@@ -82,42 +82,42 @@ class CacheCleaner:
             else:
                 logger.info(f"  No Firestore cache found for UPC: {upc}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"✗ Failed to clear Firestore cache for UPC {upc}: {e}")
             return False
-    
+
     async def clear_cache_for_upcs(self, upcs: list[str]) -> dict:
         """
         Clear cache for multiple UPCs.
-        
+
         Args:
             upcs: List of UPCs to clear
-            
+
         Returns:
             Summary of cleared caches
         """
-        logger.info(f"\n{'='*60}")
+        logger.info("\n" + "=" * 60)
         logger.info(f"CLEARING CACHE FOR {len(upcs)} UPCs")
         logger.info(f"{'='*60}\n")
-        
+
         cleared = 0
         not_found = 0
         failed = 0
-        
+
         for upc in upcs:
             if self.is_dev:
                 result = self.clear_local_cache(upc)
             else:
                 result = await self.clear_firestore_cache(upc)
-            
+
             if result:
                 cleared += 1
             elif result is False:
                 not_found += 1
             else:
                 failed += 1
-        
+
         logger.info(f"\n{'='*60}")
         logger.info(f"CACHE CLEARING COMPLETE")
         logger.info(f"{'='*60}")
@@ -125,52 +125,52 @@ class CacheCleaner:
         logger.info(f"Cleared: {cleared}")
         logger.info(f"Not found: {not_found}")
         logger.info(f"Failed: {failed}")
-        
+
         return {
             "total": len(upcs),
             "cleared": cleared,
             "not_found": not_found,
             "failed": failed
         }
-    
+
     async def clear_cache_from_gcs_file(self, bucket_name: str, file_name: str) -> dict:
         """
         Clear cache for all UPCs in a GCS file.
-        
+
         Args:
             bucket_name: GCS bucket name
             file_name: File name in the bucket
-            
+
         Returns:
             Summary of cleared caches
         """
         logger.info(f"Loading UPCs from gs://{bucket_name}/{file_name}")
-        
+
         try:
             client = storage.Client()
             bucket = client.bucket(bucket_name)
             blob = bucket.blob(file_name)
             content = blob.download_as_text()
-            
+
             # Parse UPCs
             upcs = [line.strip() for line in content.splitlines() if line.strip()]
             logger.info(f"Found {len(upcs)} UPCs in file")
-            
+
             return await self.clear_cache_for_upcs(upcs)
-            
+
         except Exception as e:
             logger.error(f"Failed to load UPCs from GCS: {e}")
             return {"error": str(e)}
-    
+
     def list_cached_upcs(self) -> list[str]:
         """
         List all UPCs that have cache entries.
-        
+
         Returns:
             List of cached UPCs
         """
         cached_upcs = []
-        
+
         if self.is_dev:
             # List local cache files
             if self.cache_dir.exists():
@@ -186,7 +186,7 @@ class CacheCleaner:
                     cached_upcs.append(doc.id)
             except Exception as e:
                 logger.error(f"Failed to list Firestore cache: {e}")
-        
+
         return sorted(cached_upcs)
 
 
@@ -218,18 +218,18 @@ async def main():
         action="store_true",
         help="Clear ALL cached entries (use with caution!)"
     )
-    
+
     args = parser.parse_args()
-    
+
     cleaner = CacheCleaner()
-    
+
     if args.list:
         # List cached UPCs
         cached_upcs = cleaner.list_cached_upcs()
         logger.info(f"\nFound {len(cached_upcs)} cached UPCs:")
         for upc in cached_upcs:
             print(f"  {upc}")
-    
+
     elif args.all:
         # Clear all cache
         response = input("Are you sure you want to clear ALL cache entries? (yes/no): ")
@@ -241,27 +241,27 @@ async def main():
                 logger.info("No cached entries found")
         else:
             logger.info("Cancelled")
-    
+
     elif args.upcs:
         # Clear specific UPCs
         await cleaner.clear_cache_for_upcs(args.upcs)
-    
+
     elif args.file:
         # Clear UPCs from local file
         with open(args.file, "r") as f:
             upcs = [line.strip() for line in f if line.strip()]
         await cleaner.clear_cache_for_upcs(upcs)
-    
+
     elif args.gcs:
         # Clear UPCs from GCS file
         parts = args.gcs.split("/", 1)
         if len(parts) != 2:
             logger.error("Invalid GCS path format. Use: bucket_name/file_name")
             sys.exit(1)
-        
+
         bucket_name, file_name = parts
         await cleaner.clear_cache_from_gcs_file(bucket_name, file_name)
-    
+
     else:
         parser.print_help()
 
