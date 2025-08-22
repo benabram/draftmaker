@@ -282,7 +282,8 @@ class DraftComposer:
         recommended_price = pricing.get("recommended_price", 9.99)
         offer["pricingSummary"]["price"]["value"] = str(recommended_price)
         
-        # Ensure Best Offer is properly set (eBay API requires this exact structure)
+        # Ensure Best Offer is properly set (eBay API requires this in pricingSummary)
+        # The template already has this, but we ensure it's set to True
         offer["pricingSummary"]["bestOfferEnabled"] = True
         
         # Optional: Set auto-accept/decline prices for Best Offer
