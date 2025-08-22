@@ -251,12 +251,13 @@ class MetadataFetcher:
         
         return metadata
     
-    async def _fetch_from_discogs(self, upc: str) -> Dict[str, Any]:
+    async def _fetch_from_discogs(self, upc: str, retry_count: int = 0) -> Dict[str, Any]:
         """
         Fetch metadata from Discogs API.
         
         Args:
             upc: The UPC barcode
+            retry_count: Current retry attempt
             
         Returns:
             Discogs metadata
@@ -327,9 +328,29 @@ class MetadataFetcher:
             return {}
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                logger.error(f"Discogs API authentication failed for UPC {upc}: 401 Unauthorized. Please check the personal access token.")
+                # Try to reload secrets in case token was updated
+                if retry_count == 0 and settings.environment.lower() == "production":
+                    logger.info("Discogs 401 error, attempting to reload token from Secret Manager")
+                    try:
+                        from src.utils.secrets_loader import get_secrets_loader
+                        loader = get_secrets_loader()
+                        new_token = loader.get_secret("DISCOGS_PERSONAL_ACCESS_TOKEN")
+                        if new_token and new_token != settings.discogs_personal_access_token:
+                            settings.discogs_personal_access_token = new_token
+                            logger.info("Reloaded Discogs token, retrying request")
+                            return await self._fetch_from_discogs(upc, retry_count=1)
+                    except Exception as reload_error:
+                        logger.warning(f"Failed to reload Discogs token: {reload_error}")
+                
+                logger.error(f"Discogs API authentication failed for UPC {upc}: 401 Unauthorized")
+            elif e.response.status_code == 500 and retry_count < 2:
+                # Retry on 500 errors with exponential backoff
+                wait_time = (2 ** retry_count) * 2
+                logger.warning(f"Discogs API 500 error, retrying in {wait_time} seconds (attempt {retry_count + 1}/2)")
+                await asyncio.sleep(wait_time)
+                return await self._fetch_from_discogs(upc, retry_count + 1)
             else:
-                logger.error(f"Discogs API HTTP error for UPC {upc}: {e.response.status_code} - {e.response.text}")
+                logger.error(f"Discogs API HTTP error for UPC {upc}: {e.response.status_code}")
             return {}
         except Exception as e:
             # Sanitize error message to remove credentials
