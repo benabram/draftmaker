@@ -91,8 +91,7 @@ Both service accounts require the following roles:
 ### 3. Secret Management
 
 Secrets are stored in Google Secret Manager. The following secrets need to be configured:
-- `DISCOGS_CONSUMER_KEY`
-- `DISCOGS_CONSUMER_SECRET`
+- `DISCOGS_PERSONAL_ACCESS_TOKEN`
 - `EBAY_APP_ID`
 - `EBAY_DEV_ID`
 - `EBAY_CERT_ID`
