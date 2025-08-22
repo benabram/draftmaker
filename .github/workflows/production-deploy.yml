@@ -76,8 +76,7 @@ jobs:
             MUSICBRAINZ_USER_AGENT=draftmaker/1.0 ( benjaminabramowitz@gmail.com )
           # Secrets from Secret Manager
           secrets: |
-            DISCOGS_CONSUMER_KEY=DISCOGS_CONSUMER_KEY:latest
-            DISCOGS_CONSUMER_SECRET=DISCOGS_CONSUMER_SECRET:latest
+            DISCOGS_PERSONAL_ACCESS_TOKEN=DISCOGS_PERSONAL_ACCESS_TOKEN:latest
             EBAY_APP_ID=EBAY_APP_ID:latest
             EBAY_DEV_ID=EBAY_DEV_ID:latest
             EBAY_CERT_ID=EBAY_CERT_ID:latest

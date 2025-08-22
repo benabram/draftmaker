@@ -114,8 +114,7 @@ setup_secrets() {
     
     # List of secrets to create (if they don't exist)
     declare -a secrets=(
-        "DISCOGS_CONSUMER_KEY"
-        "DISCOGS_CONSUMER_SECRET"
+        "DISCOGS_PERSONAL_ACCESS_TOKEN"
         "EBAY_APP_ID"
         "EBAY_DEV_ID"
         "EBAY_CERT_ID"

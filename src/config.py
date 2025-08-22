@@ -38,14 +38,9 @@ class Settings(BaseSettings):
     )
     
     # API Credentials
-    # Discogs
-    discogs_consumer_key: str = Field(default=os.getenv("DISCOGS_CONSUMER_KEY", ""), env="DISCOGS_CONSUMER_KEY")
-    discogs_consumer_secret: str = Field(
-        default=os.getenv("DISCOGS_CONSUMER_SECRET", ""),
-        env="DISCOGS_CONSUMER_SECRET"
-    )
-    discogs_personal_access_token: Optional[str] = Field(
-        default=os.getenv("DISCOGS_PERSONAL_ACCESS_TOKEN", None),
+    # Discogs - Using Personal Access Token for authentication
+    discogs_personal_access_token: str = Field(
+        default=os.getenv("DISCOGS_PERSONAL_ACCESS_TOKEN", ""),
         env="DISCOGS_PERSONAL_ACCESS_TOKEN"
     )
     

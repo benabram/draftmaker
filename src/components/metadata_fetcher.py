@@ -325,9 +325,15 @@ class MetadataFetcher:
         except httpx.TimeoutException:
             logger.error(f"Discogs API timeout for UPC: {upc}")
             return {}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                logger.error(f"Discogs API authentication failed for UPC {upc}: 401 Unauthorized. Please check the personal access token.")
+            else:
+                logger.error(f"Discogs API HTTP error for UPC {upc}: {e.response.status_code} - {e.response.text}")
+            return {}
         except Exception as e:
             # Sanitize error message to remove credentials
-            sanitized_error = sanitize_error_message(e)
+            sanitized_error = sanitize_error_message(str(e))
             logger.error(f"Error fetching from Discogs for UPC {upc}: {sanitized_error}")
             return {}
     
