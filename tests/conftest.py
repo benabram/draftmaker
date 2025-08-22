@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 # Add project root to Python path
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -36,9 +37,9 @@ def mock_environment():
         "DISCOGS_CONSUMER_SECRET": "test_consumer_secret",
         "SPOTIFY_CLIENT_ID": "test_spotify_id",
         "SPOTIFY_CLIENT_SECRET": "test_spotify_secret",
-        "GOOGLE_APPLICATION_CREDENTIALS": "test_credentials.json"
+        "GOOGLE_APPLICATION_CREDENTIALS": "test_credentials.json",
     }
-    
+
     with patch.dict(os.environ, env_vars):
         yield
 
@@ -60,8 +61,8 @@ def sample_metadata():
         "track_count": 10,
         "tracks": [
             {"title": "Track 1", "position": "1", "duration": "3:45"},
-            {"title": "Track 2", "position": "2", "duration": "4:20"}
-        ]
+            {"title": "Track 2", "position": "2", "duration": "4:20"},
+        ],
     }
 
 
@@ -76,7 +77,7 @@ def sample_pricing():
         "median_price": 12.00,
         "confidence": "high",
         "sample_size": 15,
-        "source": "ebay_completed"
+        "source": "ebay_completed",
     }
 
 
@@ -92,17 +93,17 @@ def sample_images():
                 "type": "front",
                 "width": 500,
                 "height": 500,
-                "source": "coverartarchive"
+                "source": "coverartarchive",
             },
             {
                 "url": "https://example.com/back.jpg",
                 "type": "back",
                 "width": 500,
                 "height": 500,
-                "source": "coverartarchive"
-            }
+                "source": "coverartarchive",
+            },
         ],
-        "source": "coverartarchive"
+        "source": "coverartarchive",
     }
 
 
@@ -116,5 +117,5 @@ def sample_draft_result():
         "offer_id": "offer-12345",
         "listing_id": None,
         "error": None,
-        "created_at": "2024-01-01T12:00:00"
+        "created_at": "2024-01-01T12:00:00",
     }
