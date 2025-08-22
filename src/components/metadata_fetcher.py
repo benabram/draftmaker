@@ -58,9 +58,15 @@ class MetadataFetcher:
         # Combine metadata
         metadata = self._combine_metadata(musicbrainz_data, discogs_data, upc)
 
-        # Cache the MBID if found
-        if metadata.get("mbid"):
-            await self.cache_manager.set_mbid(upc, metadata["mbid"], metadata)
+        # Cache the metadata if it's complete (has title, artist, and UPC)
+        # This ensures we cache Discogs-only metadata too, not just MusicBrainz
+        if metadata.get("is_complete"):
+            # Use MBID if available, otherwise use None (for Discogs-only metadata)
+            mbid = metadata.get("mbid", None)
+            await self.cache_manager.set_mbid(upc, mbid, metadata)
+            logger.debug(f"Cached metadata for UPC {upc} (MBID: {mbid or 'None - Discogs only'})")
+        else:
+            logger.debug(f"Not caching incomplete metadata for UPC {upc}")
 
         return metadata
 

@@ -77,18 +77,18 @@ class CacheManager:
         return None
 
     async def set_mbid(
-        self, upc: str, mbid: str, metadata: Optional[Dict[str, Any]] = None
+        self, upc: str, mbid: Optional[str], metadata: Optional[Dict[str, Any]] = None
     ):
         """
-        Cache MBID for a UPC.
+        Cache MBID and/or metadata for a UPC.
 
         Args:
             upc: The UPC code
-            mbid: The MusicBrainz ID
+            mbid: The MusicBrainz ID (can be None for Discogs-only metadata)
             metadata: Optional additional metadata to cache
         """
         cache_data = {
-            "mbid": mbid,
+            "mbid": mbid,  # Can be None for Discogs-only metadata
             "upc": upc,
             "cached_at": datetime.now(timezone.utc),
             "expires_at": datetime.now(timezone.utc)
@@ -107,7 +107,11 @@ class CacheManager:
         else:
             await self._save_to_firestore(upc, cache_data)
 
-        logger.info(f"Cached MBID {mbid} for UPC {upc}")
+        # Log appropriately based on whether we have an MBID
+        if mbid:
+            logger.info(f"Cached MBID {mbid} for UPC {upc}")
+        else:
+            logger.info(f"Cached metadata (Discogs-only, no MBID) for UPC {upc}")
 
     async def get_metadata(self, upc: str) -> Optional[Dict[str, Any]]:
         """
