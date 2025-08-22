@@ -2,7 +2,7 @@
 
 import os
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # Google Cloud Configuration
-    gcp_project_id: str = Field(default=os.getenv("GCP_PROJECT_ID", ""), env="GCP_PROJECT_ID")
+    gcp_project_id: str = Field(default=os.getenv("GCP_PROJECT_ID", "draft-maker-468923"), env="GCP_PROJECT_ID")
     gcp_region: str = Field(default=os.getenv("GCP_REGION", "us-west1"), env="GCP_REGION")
-    storage_bucket_name: str = Field(default=os.getenv("STORAGE_BUCKET_NAME", ""), env="STORAGE_BUCKET_NAME")
+    storage_bucket_name: str = Field(default=os.getenv("STORAGE_BUCKET_NAME", "draft-maker-bucket"), env="STORAGE_BUCKET_NAME")
     
     # Firestore Collections
     firestore_collection_mbid: str = Field(
@@ -95,6 +95,37 @@ class Settings(BaseSettings):
 
 # Create a global settings instance
 settings = Settings()
+
+# Load secrets from Secret Manager in production
+def _load_production_secrets():
+    """Load secrets from Google Secret Manager if in production."""
+    if settings.environment.lower() == "production":
+        try:
+            from src.utils.secrets_loader import get_secrets_loader
+            loader = get_secrets_loader()
+            secrets = loader.load_all_secrets()
+            
+            # Update settings with secrets from Secret Manager
+            if secrets.get("discogs_personal_access_token"):
+                settings.discogs_personal_access_token = secrets["discogs_personal_access_token"]
+            if secrets.get("ebay_app_id"):
+                settings.ebay_app_id = secrets["ebay_app_id"]
+            if secrets.get("ebay_dev_id"):
+                settings.ebay_dev_id = secrets["ebay_dev_id"]
+            if secrets.get("ebay_cert_id"):
+                settings.ebay_cert_id = secrets["ebay_cert_id"]
+            if secrets.get("ebay_client_secret"):
+                settings.ebay_client_secret = secrets["ebay_client_secret"]
+            if secrets.get("spotify_client_id"):
+                settings.spotify_client_id = secrets["spotify_client_id"]
+            if secrets.get("spotify_client_secret"):
+                settings.spotify_client_secret = secrets["spotify_client_secret"]
+                
+        except Exception as e:
+            print(f"Warning: Failed to load secrets from Secret Manager: {e}")
+
+# Load production secrets on module import
+_load_production_secrets()
 
 
 def get_settings() -> Settings:

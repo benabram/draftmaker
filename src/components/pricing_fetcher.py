@@ -22,6 +22,7 @@ class PricingFetcher:
     def __init__(self):
         """Initialize the pricing fetcher."""
         self.app_id = settings.ebay_app_id
+        self._validate_credentials()
         
     async def fetch_pricing(self, upc: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -111,7 +112,22 @@ class PricingFetcher:
         
         return pricing_result
     
-    async def _search_completed_items(self, keywords: str, category_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def _validate_credentials(self):
+        """Validate eBay credentials and reload from Secret Manager if needed."""
+        if not self.app_id and settings.environment.lower() == "production":
+            logger.info("eBay App ID missing, attempting to load from Secret Manager")
+            try:
+                from src.utils.secrets_loader import get_secrets_loader
+                loader = get_secrets_loader()
+                new_app_id = loader.get_secret("EBAY_APP_ID")
+                if new_app_id:
+                    settings.ebay_app_id = new_app_id
+                    self.app_id = new_app_id
+                    logger.info("Successfully loaded eBay App ID from Secret Manager")
+            except Exception as e:
+                logger.error(f"Failed to load eBay App ID from Secret Manager: {e}")
+    
+    async def _search_completed_items(self, keywords: str, category_id: Optional[str] = None, retry_count: int = 0) -> List[Dict[str, Any]]:
         """
         Search for completed (sold) items on eBay.
         
@@ -165,7 +181,19 @@ class PricingFetcher:
                     timeout=30.0
                 )
                 
-                if response.status_code != 200:
+                if response.status_code == 500 and retry_count < 2:
+                    # Retry on 500 errors with exponential backoff
+                    wait_time = (2 ** retry_count) * 3
+                    logger.warning(f"eBay Finding API 500 error, retrying in {wait_time} seconds (attempt {retry_count + 1}/2)")
+                    await asyncio.sleep(wait_time)
+                    return await self._search_completed_items(keywords, category_id, retry_count + 1)
+                elif response.status_code != 200:
+                    # Check if it's an auth issue and try to reload credentials
+                    if response.status_code in [401, 403] and retry_count == 0:
+                        logger.info("eBay API auth error, reloading credentials")
+                        self._validate_credentials()
+                        if self.app_id:
+                            return await self._search_completed_items(keywords, category_id, retry_count + 1)
                     logger.error(f"eBay Finding API error: {response.status_code}")
                     return []
                 

@@ -352,7 +352,7 @@ class DraftComposer:
         
         # Add new condition and refund text block (removed "Case may have punch holes.")
         description_parts.append(
-            "<p>The CD, Cover and Case are in Excellent condition.</p>"
+            "<p>The CD, Cover and Case condition is specified above. Some sealed CDs may have punch holes</p>"
         )
         description_parts.append(
             """
@@ -360,8 +360,8 @@ class DraftComposer:
             <p>To bring you a huge selection of music daily, we use high-quality stock images.<br>
             Every CD we sell meets the same strict standard, so you know exactly what you're getting every time.</p>
             <p><b>DISCS:</b> Professionally cleaned or resurfaced. Guaranteed to play perfectly. EX &rarr; NM<br>
-            <b>JEWEL CASES:</b> All worn cases are replaced with brand new ones.<br>
-            <b>ARTWORK:</b> All original inserts are included and in Excellent condition.</p>
+            <b>JEWEL CASES:</b> All worn cases are replaced with brand new ones, unless it has hype stickers/branding.<br>
+            <b>ARTWORK:</b> All original inserts are included and in Excellent or better condition.</p>
             <p>We're Top Rated Plus sellers with 100% Positive Feedback for a reason. Buy with absolute confidence.</p>
             """
         )
