@@ -605,13 +605,16 @@ async def list_batch_jobs(
     }
 
 
+# Maximum number of recovery attempts before giving up
+MAX_RECOVERY_ATTEMPTS = 3
+
 @app.post("/api/batch/recover/{job_id}")
 async def recover_batch_job(
     job_id: str,
     background_tasks: BackgroundTasks
 ):
     """
-    Recover a failed or interrupted batch job.
+    Recover a failed or interrupted batch job with atomic transaction support.
     
     Args:
         job_id: The job ID to recover
@@ -620,55 +623,124 @@ async def recover_batch_job(
     Returns:
         Batch job status after recovery initiation
     """
-    # Get the job from Firestore
-    job = batch_job_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Job {job_id} not found"
+    from google.cloud import firestore
+    from datetime import timezone
+    
+    db = firestore.Client(project=settings.gcp_project_id)
+    
+    # Use a transaction to atomically check and update the job
+    @firestore.transactional
+    def atomic_recovery(transaction, job_ref):
+        # Get the job document within the transaction
+        job_snapshot = job_ref.get(transaction=transaction)
+        
+        if not job_snapshot.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job {job_id} not found"
+            )
+        
+        job = job_snapshot.to_dict()
+        
+        # Check if job is already completed
+        if job.get("status") == "completed":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Job {job_id} is already completed"
+            )
+        
+        # Check recovery attempt count
+        recovery_attempts = job.get("recovery_attempts", 0)
+        if recovery_attempts >= MAX_RECOVERY_ATTEMPTS:
+            # Mark as permanently failed
+            transaction.update(job_ref, {
+                "status": "failed",
+                "error": f"Maximum recovery attempts ({MAX_RECOVERY_ATTEMPTS}) exceeded",
+                "updated_at": datetime.now(timezone.utc),
+                "completed_at": datetime.now(timezone.utc)
+            })
+            raise HTTPException(
+                status_code=400,
+                detail=f"Job {job_id} has exceeded maximum recovery attempts"
+            )
+        
+        # Check if job is currently running
+        if job.get("status") == "running":
+            # Check if it's genuinely stuck (no updates for more than 10 minutes)
+            last_update = job.get("updated_at")
+            if last_update:
+                if isinstance(last_update, str):
+                    last_update = datetime.fromisoformat(last_update)
+                if last_update.tzinfo is None:
+                    last_update = last_update.replace(tzinfo=timezone.utc)
+                
+                time_since_update = datetime.now(timezone.utc) - last_update
+                if time_since_update.total_seconds() < 600:  # Less than 10 minutes
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Job {job_id} is still actively running (last update: {time_since_update.total_seconds():.0f} seconds ago)"
+                    )
+        
+        # Proceed with recovery - atomically update the job status
+        transaction.update(job_ref, {
+            "status": "pending",  # Set to pending for re-processing
+            "error": None,  # Clear any previous error
+            "recovery_attempts": recovery_attempts + 1,
+            "last_recovery_attempt": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "recovery_history": firestore.ArrayUnion([{
+                "attempt": recovery_attempts + 1,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "previous_status": job.get("status"),
+                "previous_error": job.get("error")
+            }])
+        })
+        
+        return job
+    
+    try:
+        # Get job reference
+        job_ref = db.collection('batch_jobs').document(job_id)
+        
+        # Execute the transaction
+        transaction = db.transaction()
+        job = atomic_recovery(transaction, job_ref)
+        
+        # If transaction succeeded, add background task to resume processing
+        background_tasks.add_task(
+            run_batch_processing_task,
+            job_id,
+            job.get("gcs_path"),
+            job.get("create_drafts", True),
+            job.get("test_mode", False)
         )
-    
-    # Check if job is already running
-    if job.get("status") == "running":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Job {job_id} is already running"
+        
+        recovery_count = job.get('recovery_attempts', 0) + 1
+        logger.info(f"Batch job {job_id} successfully marked for recovery (attempt {recovery_count}/{MAX_RECOVERY_ATTEMPTS})")
+        
+        # Return updated status
+        return BatchJobStatus(
+            job_id=job_id,
+            status="pending",
+            gcs_path=job.get("gcs_path"),
+            started_at=job.get("started_at"),
+            completed_at=None,
+            total_upcs=job.get("total_upcs"),
+            successful=job.get("successful_upcs"),
+            failed=job.get("failed_upcs"),
+            error=None,
+            results=None
         )
-    
-    # Check if job is already completed
-    if job.get("status") == "completed":
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Failed to recover job {job_id}: {e}")
         raise HTTPException(
-            status_code=400,
-            detail=f"Job {job_id} is already completed"
+            status_code=500,
+            detail=f"Internal error during recovery: {str(e)}"
         )
-    
-    # Mark job for recovery
-    batch_job_manager.mark_job_for_recovery(job_id)
-    
-    # Add background task to resume processing
-    background_tasks.add_task(
-        run_batch_processing_task,
-        job_id,
-        job.get("gcs_path"),
-        job.get("create_drafts", True),
-        job.get("test_mode", False)
-    )
-    
-    logger.info(f"Batch job {job_id} marked for recovery and queued for processing")
-    
-    # Return updated status
-    return BatchJobStatus(
-        job_id=job_id,
-        status="pending",
-        gcs_path=job.get("gcs_path"),
-        started_at=job.get("started_at"),
-        completed_at=None,
-        total_upcs=job.get("total_upcs"),
-        successful=job.get("successful_upcs"),
-        failed=job.get("failed_upcs"),
-        error=None,
-        results=None
-    )
 
 
 @app.get("/health")
