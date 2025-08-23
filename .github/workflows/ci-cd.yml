@@ -9,9 +9,16 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: us-central1
+  REGION: us-west1
   SERVICE_NAME: ebay-draftmaker-job
   REPOSITORY: cloud-run-source-deploy
+
+# Add permissions for the workflow
+permissions:
+  contents: read
+  security-events: write  # Required for uploading security scan results
+  actions: read  # Required for actions cache
+  pull-requests: write  # Required for commenting on PRs
 
 jobs:
   # Job 1: Run tests and code quality checks
@@ -98,6 +105,7 @@ jobs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
+    
     - name: Run Bandit security linter
       run: |
         pip install bandit
@@ -172,7 +180,7 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/develop'
     environment:
-      name: staging
+      name: Staging
       url: https://console.cloud.google.com/run/detail/${{ env.REGION }}/${{ env.SERVICE_NAME }}-staging
     
     steps:
@@ -189,12 +197,15 @@ jobs:
     
     - name: Deploy to Cloud Run (Staging)
       run: |
-        gcloud run jobs update ${{ env.SERVICE_NAME }}-staging \
+        gcloud run deploy draft-maker-staging \
           --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ needs.build.outputs.image-tag }} \
           --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
           --memory=2Gi \
           --cpu=2 \
-          --task-timeout=3600 \
+          --timeout=3600 \
+          --max-instances=10 \
           --set-env-vars="ENVIRONMENT=staging,LOG_LEVEL=DEBUG"
     
     - name: Run smoke tests
@@ -209,7 +220,7 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     environment:
-      name: production
+      name: Production
       url: https://console.cloud.google.com/run/detail/${{ env.REGION }}/${{ env.SERVICE_NAME }}
     
     steps:
@@ -226,12 +237,15 @@ jobs:
     
     - name: Deploy to Cloud Run (Production)
       run: |
-        gcloud run jobs update ${{ env.SERVICE_NAME }} \
+        gcloud run deploy draft-maker \
           --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ needs.build.outputs.image-tag }} \
           --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
           --memory=2Gi \
           --cpu=2 \
-          --task-timeout=3600 \
+          --timeout=3600 \
+          --max-instances=10 \
           --set-env-vars="ENVIRONMENT=production,LOG_LEVEL=INFO"
     
     - name: Create GitHub Release
