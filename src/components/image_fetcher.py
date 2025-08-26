@@ -1,4 +1,4 @@
-"""Image fetcher component for Cover Art Archive and Spotify APIs."""
+"""Image fetcher component for Spotify and Discogs APIs."""
 
 import asyncio
 from typing import Dict, Any, Optional, List
@@ -12,12 +12,11 @@ from src.utils.token_manager import get_token_manager
 logger = get_logger(__name__)
 
 # API endpoints
-COVER_ART_ARCHIVE_BASE_URL = "https://coverartarchive.org"
 SPOTIFY_BASE_URL = "https://api.spotify.com/v1"
 
 
 class ImageFetcher:
-    """Fetches album artwork from Cover Art Archive and Spotify."""
+    """Fetches album artwork from Spotify and Discogs."""
 
     def __init__(self):
         """Initialize the image fetcher."""
@@ -28,51 +27,23 @@ class ImageFetcher:
         Fetch images for an album using metadata.
 
         Args:
-            metadata: Album metadata containing MBID and/or UPC
+            metadata: Album metadata containing UPC and other info
 
         Returns:
             Dictionary containing image URLs and metadata
         """
         upc = metadata.get("upc")
-        mbid = metadata.get("mbid")
 
-        logger.info(f"Fetching images for UPC: {upc}, MBID: {mbid}")
+        logger.info(f"Fetching images for UPC: {upc}")
 
         images_result = {
             "upc": upc,
-            "mbid": mbid,
             "images": [],
             "primary_image": None,
             "sources": [],
         }
 
-        # If we have MBID, try Cover Art Archive first
-        if mbid:
-            logger.info(
-                f"Attempting to fetch images from Cover Art Archive for MBID: {mbid}"
-            )
-            cover_art_images = await self._fetch_from_cover_art_archive(mbid)
-
-            if cover_art_images:
-                images_result["images"].extend(cover_art_images)
-                images_result["sources"].append("cover_art_archive")
-
-                # Set primary image from Cover Art Archive if available
-                for img in cover_art_images:
-                    if img.get("is_front"):
-                        images_result["primary_image"] = img["url"]
-                        break
-
-                # If we found good images from Cover Art Archive, we can return
-                if images_result["primary_image"]:
-                    logger.info(
-                        f"Found primary image from Cover Art Archive for MBID: {mbid}"
-                    )
-                    return images_result
-        else:
-            logger.info(f"No MBID available for UPC: {upc}, skipping Cover Art Archive")
-
-        # If no MBID or no images from Cover Art Archive, try Spotify
+        # Try Spotify first (primary source for images)
         if upc:
             logger.info(f"Fetching images from Spotify for UPC: {upc}")
             spotify_images = await self._fetch_from_spotify(upc, metadata)
@@ -81,115 +52,79 @@ class ImageFetcher:
                 images_result["images"].extend(spotify_images)
                 images_result["sources"].append("spotify")
 
-                # Set primary image from Spotify if not already set
-                if not images_result["primary_image"] and spotify_images:
+                # Set primary image from Spotify
+                if spotify_images:
                     images_result["primary_image"] = spotify_images[0]["url"]
+                    logger.info(
+                        f"Found {len(spotify_images)} images from Spotify for UPC: {upc}"
+                    )
+
+        # If no Spotify images, check if we have Discogs images in metadata
+        if not images_result["primary_image"] and metadata.get("discogs_images"):
+            logger.info(f"Using Discogs images from metadata for UPC: {upc}")
+            discogs_images = self._process_discogs_images(metadata["discogs_images"])
+            
+            if discogs_images:
+                images_result["images"].extend(discogs_images)
+                images_result["sources"].append("discogs")
+                
+                # Set primary image from Discogs
+                if discogs_images:
+                    images_result["primary_image"] = discogs_images[0]["url"]
+                    logger.info(
+                        f"Found {len(discogs_images)} images from Discogs for UPC: {upc}"
+                    )
 
         # Log summary
         total_images = len(images_result["images"])
-        logger.info(
-            f"Found {total_images} total images from {', '.join(images_result['sources'])}"
-        )
+        if total_images > 0:
+            logger.info(
+                f"Found {total_images} total images from {', '.join(images_result['sources'])}"
+            )
+        else:
+            logger.warning(f"No images found for UPC: {upc}")
 
         return images_result
 
-    async def _fetch_from_cover_art_archive(self, mbid: str) -> List[Dict[str, Any]]:
+    def _process_discogs_images(self, discogs_images: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Fetch images from Cover Art Archive using direct image URLs.
-
-        This optimized version directly fetches front cover images at specific
-        resolutions (500px, 250px, 1000px) instead of fetching the full JSON metadata.
+        Process Discogs images from metadata into a standard format.
 
         Args:
-            mbid: MusicBrainz Release ID
+            discogs_images: List of Discogs image dictionaries from metadata
 
         Returns:
-            List of image dictionaries
+            List of processed image dictionaries
         """
-        # Priority order for image sizes: 500 -> 250 -> 1000
-        sizes = ["500", "250", "1000"]
-        images = []
-
-        async with httpx.AsyncClient() as client:
-            for size in sizes:
-                url = f"{COVER_ART_ARCHIVE_BASE_URL}/release/{mbid}/front-{size}.jpg"
-
-                try:
-                    logger.debug(
-                        f"Attempting to fetch {size}px front cover for MBID: {mbid}"
-                    )
-
-                    response = await client.get(
-                        url,
-                        headers={"User-Agent": settings.musicbrainz_user_agent},
-                        timeout=10.0,  # Reduced timeout for individual requests
-                        follow_redirects=True,
-                    )
-
-                    if response.status_code == 200:
-                        # Successfully found an image at this resolution
-                        logger.info(f"Found {size}px front cover for MBID: {mbid}")
-
-                        # Create image info structure to maintain backward compatibility
-                        image_info = {
-                            "url": url,  # Direct URL to the image
-                            "thumbnail_500": url if size == "500" else None,
-                            "thumbnail_250": url if size == "250" else None,
-                            "thumbnail_large": url if size == "1000" else None,
-                            "thumbnail_small": None,  # Not fetching small thumbnails
-                            "is_front": True,  # We're specifically fetching front covers
-                            "is_back": False,
-                            "comment": f"Front cover at {size}px",
-                            "types": ["Front"],
-                            "approved": True,  # Direct URLs are typically approved images
-                            "source": "cover_art_archive",
-                            "ebay_url": url,  # Use the direct URL for eBay
-                            "size_px": int(size),
-                        }
-
-                        images.append(image_info)
-
-                        # We found an image, so we can return immediately
-                        # This ensures we use the highest priority size available
-                        return images
-
-                    elif response.status_code == 404:
-                        logger.debug(
-                            f"No {size}px front cover available for MBID: {mbid}"
-                        )
-                        # Continue to try the next size
-                        continue
-
-                    elif response.status_code == 503:
-                        logger.warning(
-                            f"Cover Art Archive unavailable while fetching {size}px image for MBID: {mbid}"
-                        )
-                        # Service unavailable, no point trying other sizes
-                        return []
-
-                    else:
-                        logger.warning(
-                            f"Unexpected status {response.status_code} for {size}px image, MBID: {mbid}"
-                        )
-                        continue
-
-                except httpx.TimeoutException:
-                    logger.warning(f"Timeout fetching {size}px image for MBID: {mbid}")
-                    # Continue to try the next size
-                    continue
-
-                except Exception as e:
-                    logger.error(f"Error fetching {size}px image for MBID {mbid}: {e}")
-                    # Continue to try the next size
-                    continue
-
-        # If we've tried all sizes and found nothing
-        if not images:
-            logger.warning(
-                f"No front cover art found at any resolution for MBID: {mbid}"
-            )
-
-        return images
+        processed_images = []
+        
+        for img in discogs_images:
+            # Use the main URI or the 150px thumbnail
+            url = img.get("uri") or img.get("uri150")
+            if url:
+                image_info = {
+                    "url": url,
+                    "width": img.get("width"),
+                    "height": img.get("height"),
+                    "type": img.get("type", "primary"),
+                    "source": "discogs",
+                    "ebay_url": url,  # Use for eBay
+                }
+                
+                # Mark the first "primary" type image as the front
+                if img.get("type") == "primary":
+                    image_info["is_front"] = True
+                    image_info["size_category"] = "large"
+                else:
+                    image_info["is_front"] = False
+                    image_info["size_category"] = "medium"
+                
+                processed_images.append(image_info)
+        
+        # Sort by type (primary first)
+        processed_images.sort(key=lambda x: (x.get("type") != "primary", x.get("type", "")))
+        
+        return processed_images
 
     async def _fetch_from_spotify(
         self, upc: str, metadata: Dict[str, Any]

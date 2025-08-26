@@ -67,12 +67,10 @@ class Settings(BaseSettings):
         default=os.getenv("SPOTIFY_CLIENT_SECRET", ""), env="SPOTIFY_CLIENT_SECRET"
     )
 
-    # MusicBrainz
-    musicbrainz_user_agent: str = Field(
-        default=os.getenv(
-            "MUSICBRAINZ_USER_AGENT", "draftmaker/1.0 ( benjaminabramowitz@gmail.com )"
-        ),
-        env="MUSICBRAINZ_USER_AGENT",
+    # User agent for API calls (used by Discogs)
+    user_agent: str = Field(
+        default="draftmaker/1.0 (benjaminabramowitz@gmail.com)",
+        env="USER_AGENT",
     )
 
     # Application Settings

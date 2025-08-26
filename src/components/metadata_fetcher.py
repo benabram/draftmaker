@@ -1,4 +1,4 @@
-"""Metadata fetcher component for MusicBrainz and Discogs APIs."""
+"""Metadata fetcher component for Discogs API."""
 
 import asyncio
 from typing import Dict, Any
@@ -14,31 +14,26 @@ from src.utils.error_sanitizer import sanitize_error_message
 logger = get_logger(__name__)
 
 # API endpoints
-MUSICBRAINZ_BASE_URL = "https://musicbrainz.org/ws/2"
 DISCOGS_BASE_URL = "https://api.discogs.com"
 
 
 class MetadataFetcher:
-    """Fetches metadata from MusicBrainz and Discogs APIs."""
+    """Fetches metadata from Discogs API."""
 
     def __init__(self):
         """Initialize the metadata fetcher."""
         self.cache_manager = get_cache_manager()
         self.token_manager = get_token_manager()
-        self.musicbrainz_headers = {
-            "User-Agent": settings.musicbrainz_user_agent,
-            "Accept": "application/json",
-        }
 
     async def fetch_metadata(self, upc: str) -> Dict[str, Any]:
         """
-        Fetch metadata for a UPC from MusicBrainz and Discogs.
+        Fetch metadata for a UPC from Discogs.
 
         Args:
             upc: The UPC barcode
 
         Returns:
-            Combined metadata from both sources
+            Metadata from Discogs
         """
         logger.info(f"Fetching metadata for UPC: {upc}")
 
@@ -48,230 +43,38 @@ class MetadataFetcher:
             logger.info(f"Using cached metadata for UPC: {upc}")
             return cached_metadata
 
-        # Fetch from MusicBrainz first (primary source)
-        musicbrainz_data = await self._fetch_from_musicbrainz(upc)
+        # Fetch from Discogs
+        metadata = await self._fetch_from_discogs(upc)
 
-        # Fetch from Discogs to supplement
-        discogs_data = await self._fetch_from_discogs(upc)
+        # Add UPC and metadata completeness check
+        if metadata:
+            metadata["upc"] = upc
+            metadata["is_complete"] = all([
+                metadata.get("title"),
+                metadata.get("artist_name"),
+                metadata.get("upc")
+            ])
+            metadata["fetched_at"] = datetime.utcnow().isoformat()
+            metadata["metadata_sources"] = ["discogs"] if metadata.get("discogs_id") else []
 
-        # Combine metadata
-        metadata = self._combine_metadata(musicbrainz_data, discogs_data, upc)
-
-        # Cache the metadata if it's complete (has title, artist, and UPC)
-        # This ensures we cache Discogs-only metadata too, not just MusicBrainz
-        if metadata.get("is_complete"):
-            # Use MBID if available, otherwise use None (for Discogs-only metadata)
-            mbid = metadata.get("mbid", None)
-            await self.cache_manager.set_mbid(upc, mbid, metadata)
-            logger.debug(
-                f"Cached metadata for UPC {upc} (MBID: {mbid or 'None - Discogs only'})"
-            )
+            # Cache the metadata if it's complete
+            if metadata.get("is_complete"):
+                await self.cache_manager.set_metadata(upc, metadata)
+                logger.debug(f"Cached metadata for UPC {upc}")
+            else:
+                logger.debug(f"Not caching incomplete metadata for UPC {upc}")
         else:
-            logger.debug(f"Not caching incomplete metadata for UPC {upc}")
+            # Return empty metadata structure if nothing found
+            metadata = {
+                "upc": upc,
+                "is_complete": False,
+                "fetched_at": datetime.utcnow().isoformat(),
+                "metadata_sources": [],
+                "error": "No metadata found"
+            }
 
         return metadata
 
-    async def _fetch_from_musicbrainz(self, upc: str) -> Dict[str, Any]:
-        """
-        Fetch metadata from MusicBrainz API.
-
-        Args:
-            upc: The UPC barcode
-
-        Returns:
-            MusicBrainz metadata
-        """
-        # Check if we have cached MBID
-        mbid = await self.cache_manager.get_mbid(upc)
-
-        if mbid:
-            # Fetch full release data using MBID
-            url = f"{MUSICBRAINZ_BASE_URL}/release/{mbid}"
-            params = {
-                "fmt": "json",
-                "inc": "artists+labels+recordings+release-groups+media+discids",
-            }
-        else:
-            # Search by barcode
-            url = f"{MUSICBRAINZ_BASE_URL}/release"
-            params = {
-                "query": f"barcode:{upc}",
-                "fmt": "json",
-                "inc": "artists+labels+recordings+release-groups+media+discids",
-            }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                # MusicBrainz rate limit: 1 request per second
-                await asyncio.sleep(1.1)  # Add buffer to avoid rate limiting
-
-                response = await client.get(
-                    url, params=params, headers=self.musicbrainz_headers, timeout=30.0
-                )
-
-                if response.status_code == 404:
-                    logger.warning(f"No MusicBrainz release found for UPC: {upc}")
-                    return {}
-
-                if response.status_code == 503:
-                    # Rate limited, wait and retry
-                    retry_after = int(response.headers.get("Retry-After", 60))
-                    logger.warning(
-                        f"MusicBrainz rate limited, waiting {retry_after} seconds"
-                    )
-                    await asyncio.sleep(retry_after)
-                    return await self._fetch_from_musicbrainz(upc)  # Retry
-
-                response.raise_for_status()
-                data = response.json()
-
-                # Extract the first release if searching
-                if "releases" in data:
-                    # Check if we have any releases
-                    if not data["releases"]:
-                        # No releases found - return empty dict to indicate no data
-                        logger.info(f"No MusicBrainz releases found for UPC: {upc}")
-                        return {}
-
-                    release = data["releases"][0]
-
-                    # Search results don't include full track data, need to fetch full release
-                    release_mbid = release.get("id")
-                    if release_mbid:
-                        logger.debug(
-                            f"Fetching full release details for MBID: {release_mbid}"
-                        )
-                        await asyncio.sleep(1.1)  # Rate limit
-
-                        # Fetch full release with all details including tracks
-                        full_url = f"{MUSICBRAINZ_BASE_URL}/release/{release_mbid}"
-                        full_params = {
-                            "fmt": "json",
-                            "inc": "artists+labels+recordings+release-groups+media+discids",
-                        }
-
-                        full_response = await client.get(
-                            full_url,
-                            params=full_params,
-                            headers=self.musicbrainz_headers,
-                            timeout=30.0,
-                        )
-
-                        if full_response.status_code == 200:
-                            release = full_response.json()
-                            logger.info(
-                                f"Fetched full release with tracks for UPC: {upc}"
-                            )
-                        else:
-                            logger.warning(
-                                f"Could not fetch full release details, using search result"
-                            )
-                elif mbid:
-                    # This was a direct MBID lookup, not a search
-                    release = data
-                else:
-                    # Unexpected response format
-                    logger.warning(
-                        f"Unexpected MusicBrainz response format for UPC: {upc}"
-                    )
-                    return {}
-
-                return self._parse_musicbrainz_response(release)
-
-        except httpx.TimeoutException:
-            logger.error(f"MusicBrainz API timeout for UPC: {upc}")
-            return {}
-        except Exception as e:
-            logger.error(f"Error fetching from MusicBrainz for UPC {upc}: {e}")
-            return {}
-
-    def _parse_musicbrainz_response(self, release: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Parse MusicBrainz release data.
-
-        Args:
-            release: Raw release data from MusicBrainz
-
-        Returns:
-            Parsed metadata
-        """
-        metadata = {
-            "mbid": release.get("id"),
-            "title": release.get("title"),
-            "barcode": release.get("barcode"),
-            "date": release.get("date"),
-            "country": release.get("country"),
-            "status": release.get("status"),
-            "source": "musicbrainz",
-        }
-
-        # Parse artist information
-        if "artist-credit" in release and release["artist-credit"]:
-            artists = []
-            for credit in release["artist-credit"]:
-                if "artist" in credit:
-                    artists.append(
-                        {
-                            "name": credit["artist"].get("name"),
-                            "id": credit["artist"].get("id"),
-                            "sort_name": credit["artist"].get("sort-name"),
-                        }
-                    )
-            metadata["artists"] = artists
-            metadata["artist_name"] = artists[0]["name"] if artists else None
-
-        # Parse label information
-        if "label-info" in release and release["label-info"]:
-            labels = []
-            for info in release["label-info"]:
-                if "label" in info and info["label"]:
-                    labels.append(
-                        {
-                            "name": info["label"].get("name"),
-                            "catalog_number": info.get("catalog-number"),
-                        }
-                    )
-            metadata["labels"] = labels
-            if labels:
-                metadata["label_name"] = labels[0]["name"]
-                metadata["catalog_number"] = labels[0]["catalog_number"]
-
-        # Parse release group information
-        if "release-group" in release:
-            rg = release["release-group"]
-            metadata["release_group"] = {
-                "id": rg.get("id"),
-                "title": rg.get("title"),
-                "type": rg.get("primary-type"),
-                "secondary_types": rg.get("secondary-types", []),
-            }
-            metadata["release_type"] = rg.get("primary-type")
-
-        # Parse media/track information
-        if "media" in release and release["media"]:
-            total_tracks = 0
-            tracks = []
-            for medium in release["media"]:
-                medium_tracks = medium.get("tracks", [])
-                total_tracks += len(medium_tracks)
-
-                for track in medium_tracks:
-                    tracks.append(
-                        {
-                            "position": track.get("position"),
-                            "number": track.get("number"),
-                            "title": track.get("title"),
-                            "length": track.get("length"),
-                        }
-                    )
-
-            metadata["track_count"] = total_tracks
-            metadata["tracks"] = tracks
-            metadata["format"] = (
-                release["media"][0].get("format") if release["media"] else None
-            )
-
-        return metadata
 
     async def _fetch_from_discogs(
         self, upc: str, retry_count: int = 0
@@ -299,7 +102,7 @@ class MetadataFetcher:
 
         # Prepare Discogs authentication using Personal Access Token
         headers = {
-            "User-Agent": settings.musicbrainz_user_agent,
+            "User-Agent": "draftmaker/1.0 (benjaminabramowitz@gmail.com)",
             "Authorization": f"Discogs token={settings.discogs_personal_access_token}",
         }
 
@@ -491,101 +294,6 @@ class MetadataFetcher:
 
         return metadata
 
-    def _combine_metadata(
-        self, musicbrainz_data: Dict[str, Any], discogs_data: Dict[str, Any], upc: str
-    ) -> Dict[str, Any]:
-        """
-        Combine metadata from MusicBrainz and Discogs.
-
-        Args:
-            musicbrainz_data: Data from MusicBrainz
-            discogs_data: Data from Discogs
-            upc: The UPC code
-
-        Returns:
-            Combined metadata
-        """
-        # Start with MusicBrainz as the primary source
-        combined = musicbrainz_data.copy() if musicbrainz_data else {}
-
-        # Add UPC
-        combined["upc"] = upc
-
-        # Extract year from date if we don't have it (for MusicBrainz data)
-        if not combined.get("year") and combined.get("date"):
-            # Extract year from date field (MusicBrainz uses date, not year)
-            date_str = combined.get("date", "")
-            if len(date_str) >= 4:
-                combined["year"] = date_str[:4]
-                logger.debug(f"Extracted year {combined['year']} from date {date_str}")
-
-        # Supplement with Discogs data where MusicBrainz is missing
-        if discogs_data:
-            # Add Discogs-specific fields
-            combined["discogs_id"] = discogs_data.get("discogs_id")
-            combined["genres"] = discogs_data.get("genres", [])
-            combined["styles"] = discogs_data.get("styles", [])
-            combined["discogs_images"] = discogs_data.get("discogs_images", [])
-
-            # Fill in missing fields from Discogs
-            if not combined.get("title"):
-                combined["title"] = discogs_data.get("title")
-
-            if not combined.get("artist_name"):
-                combined["artist_name"] = discogs_data.get("artist_name")
-
-            # Use Discogs year if we still don't have one
-            if not combined.get("year") and discogs_data.get("year"):
-                combined["year"] = str(discogs_data["year"])
-                logger.debug(f"Using Discogs year: {combined['year']}")
-
-            if not combined.get("label_name"):
-                combined["label_name"] = discogs_data.get("label_name")
-
-            if not combined.get("catalog_number"):
-                combined["catalog_number"] = discogs_data.get("catalog_number")
-
-            if not combined.get("format"):
-                combined["format"] = discogs_data.get("format")
-
-            if not combined.get("country"):
-                combined["country"] = discogs_data.get("country")
-
-            if not combined.get("tracks") and discogs_data.get("tracks"):
-                combined["tracks"] = discogs_data["tracks"]
-                combined["track_count"] = discogs_data.get("track_count")
-
-            # Add producer if we found one from Discogs
-            if not combined.get("producer") and discogs_data.get("producer"):
-                combined["producer"] = discogs_data["producer"]
-                logger.debug(f"Using Discogs producer: {combined['producer']}")
-
-        # Add metadata sources - only include sources that actually provided data
-        sources = []
-        # Check if MusicBrainz provided actual data (not just empty/None values)
-        if musicbrainz_data and (
-            musicbrainz_data.get("title")
-            or musicbrainz_data.get("artist_name")
-            or musicbrainz_data.get("mbid")
-        ):
-            sources.append("musicbrainz")
-        if discogs_data and (
-            discogs_data.get("title")
-            or discogs_data.get("artist_name")
-            or discogs_data.get("discogs_id")
-        ):
-            sources.append("discogs")
-        combined["metadata_sources"] = sources
-
-        # Add fetch timestamp
-        combined["fetched_at"] = datetime.utcnow().isoformat()
-
-        # Ensure we have at least basic required fields
-        combined["is_complete"] = all(
-            [combined.get("title"), combined.get("artist_name"), combined.get("upc")]
-        )
-
-        return combined
 
 
 # Global metadata fetcher instance
